@@ -1,10 +1,19 @@
 # Status
 
-_Last updated 2026-09-24, after commit `2b99d1b` ("Implement interactive 2D demo of RBF Your SDF")._
+_Last updated 2026-09-24. Implementation in commit `2b99d1b`; deployment added afterwards._
+
+**Live:** https://yig.github.io/rbf-your-sdf-demo/ (repo: https://github.com/yig/rbf-your-sdf-demo, public).
 
 The 2D demo works end to end. I tested it in headless Chrome across all seven example shapes, grid and scattered sampling, grids from 4² to 32², and phone width. The 16 unit tests for the algorithm code pass, and the production build runs correctly.
 
-To try it: `cd demo && npm install && npm run dev`.
+To try it locally: `cd demo && npm install && npm run dev`.
+
+## Deployment
+
+- Hosted on GitHub Pages. The local `demo/` repo's `origin` is `github.com:yig/rbf-your-sdf-demo`, branch `main`.
+- `.github/workflows/deploy.yml` runs on every push to `main`: tests, build, publish `dist/`. A failing test blocks the deploy.
+- The first deploy succeeded, and the live site was checked in headless Chrome: the full pipeline ran (256 samples, 12 fits, 0.34 s) with no errors.
+- The public repo includes `CLAUDE.md`, `PLAN.md` and this file, by choice.
 
 ## What the page does
 

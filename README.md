@@ -9,6 +9,8 @@ A step-by-step, in-browser walkthrough of the paper's algorithm in 2D:
 5. Re-fit with the tangent points as zero-valued constraints.
 6. Iterate 4–5.
 
+**Live demo:** https://yig.github.io/rbf-your-sdf-demo/
+
 ## Running
 
 ```sh
@@ -17,6 +19,14 @@ npm run dev        # http://localhost:5173
 npm test           # unit tests for the algorithm core
 npm run build      # static site in dist/ (relative paths; host anywhere, e.g. GitHub Pages)
 ```
+
+## Deployment
+
+The site is hosted on GitHub Pages from https://github.com/yig/rbf-your-sdf-demo.
+Every push to `main` runs `.github/workflows/deploy.yml`, which installs dependencies,
+runs the tests, builds, and publishes `dist/`. A failing test stops the deploy, so a
+broken build never goes live. To redeploy without a new commit:
+`gh workflow run deploy.yml`. Check progress with `gh run list` or the repo's Actions tab.
 
 ## Code layout
 
