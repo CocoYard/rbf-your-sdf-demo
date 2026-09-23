@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>RBF Your SDF — interactive 2D walkthrough</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='12' cy='14' r='9' fill='none' stroke='%23d6453d' stroke-width='2.5'/%3E%3Ccircle cx='21' cy='19' r='7' fill='none' stroke='%232f6db5' stroke-width='2.5'/%3E%3C/svg%3E" />
+  <meta name="description" content="Step-by-step interactive 2D demo of RBF Your SDF: radial basis function interpolation of signed distance fields with implied tangent points." />
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">Interactive 2D walkthrough</p>
+    <h1>RBF Your SDF</h1>
+    <p class="subtitle">Radial Basis Function Interpolation of Signed Distance Fields with Implied Tangent Points</p>
+    <p class="authors">Yong Cheng &nbsp;·&nbsp; Yotam Gingold &nbsp;<span class="affil">George Mason University</span></p>
+    <p class="lede">
+      Given only samples of a signed distance function (SDF), we want a smooth function whose zero level set
+      recovers the surface. Each SDF sample secretly says more than its value: the surface must touch the circle
+      (in 3D, the sphere) around the sample whose radius is the sample's distance. This page runs a 2D version of the
+      algorithm live in your browser, one step at a time. Change the shape or the sampling in the bar below and every
+      figure updates.
+    </p>
+  </header>
+
+  <div class="controls" id="controls">
+    <div class="ctl">
+      <label for="shape">Shape</label>
+      <select id="shape">
+        <option value="examples/eiffel.svg">Eiffel</option>
+        <option value="examples/horse.svg">Horse</option>
+        <option value="examples/star.svg">Star</option>
+        <option value="examples/square.svg">Rotated square</option>
+        <option value="examples/box.svg">Box</option>
+        <option value="examples/blob.svg">Blob</option>
+        <option value="examples/ring.svg">Ring</option>
+        <option value="upload">Upload SVG…</option>
+      </select>
+      <input type="file" id="upload" accept=".svg,image/svg+xml" hidden />
+    </div>
+    <div class="ctl">
+      <span class="lbl">Samples</span>
+      <div class="seg" role="radiogroup" aria-label="Sampling pattern">
+        <label><input type="radio" name="sampling" value="grid" checked /> grid</label>
+        <label><input type="radio" name="sampling" value="scattered" /> scattered</label>
+      </div>
+    </div>
+    <div class="ctl" id="ctl-grid">
+      <label for="grid-n">Grid <output id="grid-n-out">16²</output></label>
+      <input type="range" id="grid-n" min="4" max="32" value="16" />
+    </div>
+    <div class="ctl" id="ctl-count" hidden>
+      <label for="count">Count <output id="count-out">250</output></label>
+      <input type="range" id="count" min="20" max="1000" step="10" value="250" />
+    </div>
+    <div class="ctl" id="ctl-seed" hidden>
+      <label for="seed">Seed</label>
+      <span class="row"><input type="number" id="seed" value="1" min="0" step="1" /><button type="button" id="reseed" title="New random seed">↻</button></span>
+    </div>
+    <div class="ctl">
+      <label for="iters">Iterations <output id="iters-out">10</output></label>
+      <input type="range" id="iters" min="1" max="25" value="10" />
+    </div>
+    <div class="ctl">
+      <label class="check"><input type="checkbox" id="use-regions" checked /> Exposed-arc step</label>
+    </div>
+    <details class="ctl advanced">
+      <summary>Advanced</summary>
+      <div class="adv-grid">
+        <label for="kernel">Kernel</label>
+        <select id="kernel">
+          <option value="cubic">cubic r³ (paper)</option>
+          <option value="thinplate">thin plate r² log r</option>
+          <option value="linear">linear r</option>
+        </select>
+        <label for="descent-iters">Descent steps / iteration</label>
+        <input type="number" id="descent-iters" min="1" max="200" value="10" />
+        <label for="eps-degen">ε<sub>degen</sub> (collapse threshold)</label>
+        <input type="number" id="eps-degen" value="0.00002" step="0.00001" min="0" />
+        <label class="check span2"><input type="checkbox" id="defer-isolated" checked /> Defer isolated samples in iteration 1</label>
+        <label class="check span2"><input type="checkbox" id="filter-infeasible" checked /> Cull projections outside the exposed arcs</label>
+        <label class="check span2"><input type="checkbox" id="monotone" checked /> Keep previous feasible point instead of regressing</label>
+        <label class="check span2"><input type="checkbox" id="clamp" checked /> Clamp near-misses onto tiny exposed regions (iteration ≥ 7)</label>
+      </div>
+    </details>
+    <div class="status" id="status" aria-live="polite"></div>
+  </div>
+
+  <main>
+    <section id="s1">
+      <h2><span class="num">1</span> Ground truth and SDF samples</h2>
+      <p>
+        We start from a closed curve (loaded from an SVG, so it is easy to swap in your own) and sample its signed
+        distance function <span class="m">D</span>, negative inside and positive outside. Each sample
+        <span class="m">(\mathbf{x}_i, d_i)</span> is drawn as a circle of radius <span class="m">|d_i|</span>:
+        <span class="pos">red</span> outside, <span class="neg">blue</span> inside.
+      </p>
+      <p>
+        The disk of each circle lies entirely on one side of the curve, and the circle <em>touches</em> the curve at
+        the sample's closest point <span class="m">\mathbf{a}_i = \mathbf{x}_i - d_i \nabla D(\mathbf{x}_i)</span>.
+        So every sample implies a second, zero-valued constraint somewhere on its circle: its <em>tangent point</em>.
+        We do not know where it is, because we do not know <span class="m">\nabla D</span>. Finding it is the heart of the method.
+        Hover over a sample to see its true tangent point.
+      </p>
+      <figure class="demo-fig">
+        <div class="fig-toolbar" id="tb-samples"></div>
+        <div class="fig-host" id="fig-samples"></div>
+        <div class="fig-info" id="info-samples"></div>
+      </figure>
+    </section>
+
+    <section id="s2">
+      <h2><span class="num">2</span> <span class="optional">Optional</span> Power diagram and exposed arcs</h2>
+      <p>
+        A tangent point cannot be inside another sample's disk, since that disk contains no surface. The part of a circle not covered by
+        other disks is its <em>exposed region</em>, here a set of <span class="swatch arc"></span>exposed arcs. They are exactly the
+        pieces of the boundary of the union of all disks. We compute them with the <em>power diagram</em>, whose dual is the
+        regular triangulation: the cell of sample <span class="m">i</span> is where
+        <span class="m">|\mathbf{x}-\mathbf{x}_i|^2 - d_i^2</span> is smallest, and each circle's exposed arcs are the parts of the circle
+        inside its own cell. So we clip each circle against the edges of its cell.
+      </p>
+      <p>
+        Sometimes the exposed region collapses to (nearly) a single point, for example at sharp corners, where the circle is
+        squeezed by its neighbors, or when two circles are internally tangent, as with collinear grid samples near
+        a flat edge. Then the tangent point is determined by geometry alone and is <span class="swatch fixed"></span>fixed there.
+        A sample that is completely covered disappears from the power diagram (dashed circles); we clip it against the
+        neighbors of the cell that contains it, and an infinitesimal arc remains.
+        This step is optional: turn off <b>Exposed-arc step</b> above to skip it.
+      </p>
+      <figure class="demo-fig">
+        <div class="fig-toolbar" id="tb-power"></div>
+        <div class="fig-host" id="fig-power"></div>
+        <div class="fig-info" id="info-power"></div>
+      </figure>
+    </section>
+
+    <section id="s3">
+      <h2><span class="num">3</span> Interpolate the samples with an RBF</h2>
+      <p>
+        We fit a radial basis function interpolant with the cubic kernel <span class="m">\varphi(r) = r^3</span> and a linear polynomial:
+      </p>
+      <div class="md">\tilde D(\mathbf{x}) = \sum_{i} \alpha_i \, \|\mathbf{x}-\mathbf{x}_i\|^3 + \mathbf{c}^\top\mathbf{x} + c_0,
+        \qquad \tilde D(\mathbf{x}_i) = d_i, \quad \textstyle\sum_i \alpha_i = 0, \quad \sum_i \alpha_i \mathbf{x}_i = \mathbf{0}.</div>
+      <p>
+        The coefficients come from one symmetric linear system. The <span class="lvl">zero level set</span> interpolates the
+        samples' values, but with the samples alone it floats off the true curve and rounds off sharp features,
+        because nothing tells it where the surface actually is.
+      </p>
+      <figure class="demo-fig">
+        <div class="fig-toolbar" id="tb-rbf0"></div>
+        <div class="fig-host" id="fig-rbf0"></div>
+        <div class="fig-info" id="info-rbf0"></div>
+      </figure>
+    </section>
+
+    <section id="s4">
+      <h2><span class="num">4</span> Find tangent points by projected descent</h2>
+      <p>
+        For each sample we look for the point <span class="m">\mathbf{y} = \mathbf{x} - d\,\mathbf{g}</span> on its circle
+        (<span class="m">\mathbf{g}</span> a unit direction) that reaches farthest past the current zero level set into the region of
+        opposite sign. That is, we minimize
+      </p>
+      <div class="md">f(\mathbf{g}) = \tilde D(\mathbf{x} - d\,\mathbf{g}) \,/\, d \quad\text{over } \|\mathbf{g}\| = 1.</div>
+      <p>
+        Dividing by <span class="m">d</span> handles both signs and makes the gradient simply
+        <span class="m">\nabla f = -\nabla \tilde D(\mathbf{y})</span>. At a minimum, <span class="m">\mathbf{g}</span> is parallel to
+        the level set's normal at <span class="m">\mathbf{y}</span>, exactly the tangency condition. We start from the best of 64
+        directions, then take projected gradient steps: step along the tangent, then renormalize onto the circle.
+        Samples whose circle touches no other circle are deferred to the next iteration.
+        With exposed arcs enabled, points that land outside their exposed region are culled.
+        Click a sample to plot <span class="m">f</span> around its circle.
+      </p>
+      <figure class="demo-fig">
+        <div class="fig-toolbar" id="tb-descent"></div>
+        <div class="fig-host" id="fig-descent"></div>
+        <div class="fig-info" id="info-descent"></div>
+        <div class="inset">
+          <div class="inset-title" id="objective-title">Objective around the selected sample's circle</div>
+          <div id="plot-objective" class="plot-host"></div>
+        </div>
+      </figure>
+    </section>
+
+    <section id="s5">
+      <h2><span class="num">5</span> Re-fit with the tangent points</h2>
+      <p>
+        Every accepted tangent point becomes an extra interpolation constraint with value 0, and we solve for the RBF again.
+        Near-duplicate points are merged first to keep the system well conditioned. The <span class="lvl">new level set</span> is pulled onto the
+        tangent points and moves toward the true curve; the <span class="prev">previous level set</span> is shown dashed.
+      </p>
+      <figure class="demo-fig">
+        <div class="fig-toolbar" id="tb-refit"></div>
+        <div class="fig-host" id="fig-refit"></div>
+        <div class="fig-info" id="info-refit"></div>
+      </figure>
+    </section>
+
+    <section id="s6">
+      <h2><span class="num">6</span> Iterate</h2>
+      <p>
+        With a better <span class="m">\tilde D</span>, the tangent directions improve, which improves <span class="m">\tilde D</span>.
+        Each iteration warm-starts every sample's descent from its previous direction. Scrub through the iterations
+        and watch the level set settle onto the ground truth, including corners the initial interpolant could not represent.
+      </p>
+      <figure class="demo-fig">
+        <div class="fig-toolbar" id="tb-iterate"></div>
+        <div class="fig-host" id="fig-iterate"></div>
+        <div class="fig-info" id="info-iterate"></div>
+        <div class="inset">
+          <div class="inset-title">Error per stage (log scale)</div>
+          <div id="plot-error" class="plot-host"></div>
+          <div class="legend-row">
+            <span><i class="line" style="--c:#1a8a4a"></i>Chamfer distance, level set ↔ ground truth</span>
+            <span><i class="line dashed" style="--c:#555"></i>mean |D̃| on the ground truth</span>
+          </div>
+        </div>
+      </figure>
+    </section>
+
+    <section id="notes">
+      <h2>Notes</h2>
+      <p>
+        This demo is a simplified 2D version of the method. The full 3D method uses the same ideas with spheres instead of circles,
+        a partition-of-unity RBF for speed, BFGS instead of plain projected gradient descent, and dual contouring to extract a mesh.
+        All algorithm code runs in your browser in a Web Worker and is independent of the page.
+      </p>
+      <p class="fine">
+        Drag to pan, scroll to zoom, double-click to reset any figure. Uploaded SVGs are interpreted with the even-odd fill rule; all
+        closed paths, polygons, rects, circles, and ellipses are used.
+      </p>
+    </section>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

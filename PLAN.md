@@ -47,6 +47,12 @@ tests/*.test.ts  # vitest
 - Canonical domain: shape normalized to [-1,1]²; paper thresholds (ε_degen=1e-5, ε_val=0.1, ε_tan=1e-4, dedup 5e-4) exposed in an "advanced" panel.
 - Recompute is incremental: changing iteration count doesn't redo sampling; changing sampling invalidates downstream.
 
+## Implementation notes (deviations from the plan above)
+- Field display uses Canvas2D, not WebGL: a second worker evaluates the RBF in double precision on a lattice sized to the current view; colormap, iso-contours, and the zero level set (marching squares) are drawn from that. This avoids float32 cancellation in the cubic sum.
+- Figures, drawing, and plots live in `src/viz/`; worker plumbing, state, and metrics live in `src/app/`; `src/main.ts` wires one figure per section (no separate `src/steps/`).
+- The exposed-region logic is behind `ExposedRegionOracle` (`core/regions.ts`); the 2D implementation is `core/regions2d.ts`.
+- Example shapes: Eiffel and horse traced from `yongsalgorithm/examples/*.png`; star, rotated square, box, blob, ring hand-written.
+
 ## Verification
 - `npm test` (vitest): RBF interpolates its data to ~1e-10 and reproduces linear functions exactly; polygon SDF on a square matches analytic; equal-radius power diagram == Voronoi (compare vs brute-force nearest-site); two-circle exposed arcs match analytic angles; a sample fully inside two others yields an infinitesimal arc; tangent search on an exact circle-shaped SDF converges to analytic closest point; pipeline on a square decreases GT error across iterations.
 - `npm run dev` and view in browser: walk all steps on eiffel/star with grid & scattered, toggle the power-diagram step; check level set approaches GT over iterations (compare qualitatively to Fig. `fig:eiffel`).
