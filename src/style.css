@@ -111,7 +111,7 @@ label.check { display: flex; align-items: center; gap: 5px; color: var(--fg) !im
 .fig-toolbar select { font: inherit; padding: 2px 4px; border-radius: 6px; border: 1px solid #ccc; }
 .fig-host { position: relative; }
 .fig-canvas { position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 78vh; border-radius: 8px; overflow: hidden; background: #fff; }
-.fig-canvas canvas { display: block; touch-action: none; cursor: crosshair; }
+.fig-canvas canvas { display: block; touch-action: pan-x pan-y; cursor: crosshair; }
 .fig-canvas canvas.panning { cursor: grabbing; }
 .fig-reset {
   position: absolute; right: 8px; top: 8px; width: 28px; height: 28px; border-radius: 6px; border: 1px solid #ddd;

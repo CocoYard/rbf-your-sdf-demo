@@ -160,7 +160,7 @@ export function drawArcs(
 /** Nearest sample center within `maxPx` screen pixels, or −1. */
 export function pickSample(fig: Figure, s: Samples | null, world: [number, number], maxPx = 14): number {
   if (!s) return -1;
-  let best = -1, bd = (maxPx / fig.scale) ** 2;
+  let best = -1, bd = ((maxPx * fig.hitScale) / fig.scale) ** 2;
   for (let i = 0; i < s.values.length; i++) {
     const dx = s.points[2 * i] - world[0], dy = s.points[2 * i + 1] - world[1];
     const d2 = dx * dx + dy * dy;
