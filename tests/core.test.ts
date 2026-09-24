@@ -232,6 +232,45 @@ describe('partition of unity', () => {
     }
   });
 
+  it('stays continuous where it leaves the union of supports', () => {
+    const vals = Float64Array.from({ length: n }, (_, i) => Math.hypot(pts[2 * i], pts[2 * i + 1]) - 0.5);
+    const m = fitPU(2, pts, vals, 'cubic', opts);
+    const covered = (x: number, y: number) => m.patches.some((p) => Math.hypot(x - p.center[0], y - p.center[1]) < p.radius);
+    const h = 1e-5;
+    let exits = 0;
+    for (let a = 0; a < 64; a++) {
+      const ux = Math.cos((2 * Math.PI * a) / 64), uy = Math.sin((2 * Math.PI * a) / 64);
+      // First exit from the union along the ray, then bisect to the boundary.
+      let lo = 0.5, hi = lo;
+      while (hi < 3 && covered(hi * ux, hi * uy)) hi += 0.01;
+      if (hi >= 3) continue;
+      lo = hi - 0.01;
+      for (let k = 0; k < 40; k++) {
+        const mid = (lo + hi) / 2;
+        if (covered(mid * ux, mid * uy)) lo = mid;
+        else hi = mid;
+      }
+      const inside = evalPU(m, [(lo - h) * ux, (lo - h) * uy]);
+      const outside = evalPU(m, [(hi + h) * ux, (hi + h) * uy]);
+      expect(Math.abs(outside - inside)).toBeLessThan(1e-3);
+      exits++;
+    }
+    expect(exits).toBeGreaterThan(30);
+  });
+
+  it('fallback gradient matches finite differences outside the supports', () => {
+    const vals = Float64Array.from({ length: n }, (_, i) => Math.sin(3 * pts[2 * i]) * Math.cos(2 * pts[2 * i + 1]));
+    const m = fitPU(2, pts, vals, 'cubic', opts);
+    const h = 1e-6;
+    for (const p of [[1.6, 0.3], [-1.4, -1.5], [0.2, 2.1]]) {
+      expect(m.patches.some((q) => Math.hypot(p[0] - q.center[0], p[1] - q.center[1]) < q.radius)).toBe(false);
+      const g = new Float64Array(2);
+      expect(evalPUGrad(m, p, g)).toBeCloseTo(evalPU(m, p), 12);
+      expect(g[0]).toBeCloseTo((evalPU(m, [p[0] + h, p[1]]) - evalPU(m, [p[0] - h, p[1]])) / (2 * h), 4);
+      expect(g[1]).toBeCloseTo((evalPU(m, [p[0], p[1] + h]) - evalPU(m, [p[0], p[1] - h])) / (2 * h), 4);
+    }
+  });
+
   it('lattice evaluation matches pointwise evaluation', () => {
     const vals = Float64Array.from({ length: n }, (_, i) => pts[2 * i] ** 2 - pts[2 * i + 1]);
     const m = fitPU(2, pts, vals, 'cubic', opts);

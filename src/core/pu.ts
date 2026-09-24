@@ -9,8 +9,10 @@
  *
  *   D̃(x) = Σ_j ŵ_j(x) f_j(x) / Σ_k ŵ_k(x),   ŵ_j = Wendland C2 of |x − ξ_j| / R_j.
  *
- * Points outside every support use the nearest patch's local fit directly.
- * Mirrors PUInterpolator(partition='sphere') in the reference sdfgradients/interpolation.py.
+ * Points outside every support use the local fit(s) of the patch(es) whose spheres are
+ * nearest (see `fallback`).
+ * Mirrors PUInterpolator(partition='sphere') in the reference sdfgradients/interpolation.py,
+ * except for that fallback: the reference evaluates only the patch with the nearest center.
  */
 
 import type { KernelName } from './kernel';
@@ -222,16 +224,86 @@ function wendlandDeriv(s: number): number {
   return -20 * s * t * t * t;
 }
 
-function nearestPatch(model: PUModel, x: ArrayLike<number>, offset: number): PUPatch {
-  let best = model.patches[0], bestD = Infinity;
-  for (const p of model.patches) {
-    const d = dist2(x, offset, p.center, 0, model.dim);
-    if (d < bestD) {
-      bestD = d;
-      best = p;
+/**
+ * Outside every support, blend the local fits of this many patches with the nearest spheres.
+ * k = 1 is simply the patch with the nearest sphere: continuous where the field leaves the
+ * union of supports, but it jumps where the nearest sphere changes. k ≥ 2 removes those jumps.
+ */
+const FALLBACK_K = 1;
+
+/**
+ * The field outside every support: modified Shepard (Franke–Little) blending of the
+ * FALLBACK_K patches whose spheres are nearest. With d_j = |x − ξ_j| − R_j and D the
+ * (k+1)-th smallest d, w_j = (1/d_j − 1/D)². As d_j → 0 the blend tends to f_j, which
+ * matches the PU just inside patch j's support; when patch j drops out of the k nearest,
+ * d_j → D and w_j → 0, so for k ≥ 2 the field is continuous everywhere. Writes ∇f into
+ * `grad` if given.
+ */
+function fallback(model: PUModel, x: ArrayLike<number>, offset: number, grad: Float64Array | number[] | null): number {
+  const dim = model.dim;
+  const P = model.patches;
+  const dist = new Float64Array(P.length);
+  for (let j = 0; j < P.length; j++) dist[j] = Math.sqrt(dist2(x, offset, P[j].center, 0, dim)) - P[j].radius;
+  // Indices of the k + 1 smallest distances, ascending.
+  const near: number[] = [];
+  for (let j = 0; j < P.length; j++) {
+    if (near.length === FALLBACK_K + 1 && dist[j] >= dist[near[FALLBACK_K]]) continue;
+    let pos = near.length;
+    while (pos > 0 && dist[near[pos - 1]] > dist[j]) pos--;
+    near.splice(pos, 0, j);
+    if (near.length > FALLBACK_K + 1) near.pop();
+  }
+  const outer = near.length > FALLBACK_K ? near[FALLBACK_K] : -1;
+  const invD = outer >= 0 ? 1 / dist[outer] : 0;
+  const used = near.slice(0, FALLBACK_K);
+
+  const g = new Float64Array(dim);
+  const unit = (j: number, out: Float64Array) => {
+    // ∇d_j = (x − ξ_j) / |x − ξ_j|
+    let r = 0;
+    for (let c = 0; c < dim; c++) {
+      out[c] = x[offset + c] - P[j].center[c];
+      r += out[c] * out[c];
+    }
+    r = Math.sqrt(r) || 1;
+    for (let c = 0; c < dim; c++) out[c] /= r;
+  };
+  // On a sphere (d = 0) the blend is that patch alone.
+  if (dist[used[0]] <= 1e-14) {
+    const p = P[used[0]].model;
+    return grad ? evalRBFGrad(p, x, grad) : evalRBF(p, x, offset);
+  }
+  const gradD = new Float64Array(dim);
+  if (grad && outer >= 0) unit(outer, gradD);
+
+  let W = 0, V = 0;
+  const G = new Float64Array(dim), A = new Float64Array(dim), B = new Float64Array(dim), u = new Float64Array(dim);
+  for (const j of used) {
+    const a = 1 / dist[j] - invD;
+    const w = a * a;
+    if (!(w > 0)) continue;
+    const f = grad ? evalRBFGrad(P[j].model, x, g) : evalRBF(P[j].model, x, offset);
+    W += w;
+    V += w * f;
+    if (grad) {
+      unit(j, u);
+      // ∇w = 2a (−∇d_j / d_j² + ∇D / D²)
+      for (let c = 0; c < dim; c++) {
+        const dw = 2 * a * (-u[c] / (dist[j] * dist[j]) + gradD[c] * invD * invD);
+        G[c] += w * g[c];
+        A[c] += f * dw;
+        B[c] += dw;
+      }
     }
   }
-  return best;
+  if (W <= 0) {
+    // All k tie with the (k+1)-th: any of them is the limit.
+    const p = P[used[0]].model;
+    return grad ? evalRBFGrad(p, x, grad) : evalRBF(p, x, offset);
+  }
+  const f = V / W;
+  if (grad) for (let c = 0; c < dim; c++) grad[c] = (G[c] + A[c] - f * B[c]) / W;
+  return f;
 }
 
 /** Evaluate the blended field at the point stored at x[offset .. offset+dim). */
@@ -244,7 +316,7 @@ export function evalPU(model: PUModel, x: ArrayLike<number>, offset = 0): number
     W += w;
     V += w * evalRBF(p.model, x, offset);
   }
-  return W > 0 ? V / W : evalRBF(nearestPatch(model, x, offset).model, x, offset);
+  return W > 0 ? V / W : fallback(model, x, offset, null);
 }
 
 /**
@@ -271,7 +343,7 @@ export function evalPUGrad(model: PUModel, x: ArrayLike<number>, grad: Float64Ar
       B[c] += dw;
     }
   }
-  if (W <= 0) return evalRBFGrad(nearestPatch(model, x, 0).model, x, grad);
+  if (W <= 0) return fallback(model, x, 0, grad);
   const f = V / W;
   for (let c = 0; c < dim; c++) grad[c] = (G[c] + A[c] - f * B[c]) / W;
   return f;
@@ -316,7 +388,7 @@ export function evalPUGrid2D(
       if (W[k] > 0) V[k] /= W[k];
       else {
         q[0] = coord(x0, hx, i);
-        V[k] = evalRBF(nearestPatch(model, q, 0).model, q);
+        V[k] = fallback(model, q, 0, null);
       }
     }
   }

@@ -98,13 +98,14 @@ function run(): void {
   options.monotoneFeasibility = ui.monotone.checked;
   options.clamp.enabled = ui.clamp.checked;
   if (ui.dedup.value !== '' && Number.isFinite(+ui.dedup.value)) options.dedupRadius = Math.max(0, +ui.dedup.value);
-  const int = (el: HTMLInputElement, fallback: number, min: number) => Math.max(min, Math.round(+el.value || fallback));
+  const int = (el: HTMLInputElement, fallback: number, min: number) =>
+    Math.max(min, el.value.trim() !== '' && Number.isFinite(+el.value) ? Math.round(+el.value) : fallback);
   options.interpolant.method = ui.usePU.checked ? 'pu' : 'global';
   options.interpolant.pu = {
     overlap: Math.max(0, Number.isFinite(+ui.puOverlap.value) ? +ui.puOverlap.value : 0.25),
-    maxLeafPoints: int(ui.puLeaf, 200, 4),
-    maxPatchPoints: int(ui.puPatch, 675, 4),
-    minPatchPoints: int(ui.puMin, 10, 4),
+    maxLeafPoints: int(ui.puLeaf, 50, 4),
+    maxPatchPoints: int(ui.puPatch, 100, 4),
+    minPatchPoints: int(ui.puMin, 0, 0),
   };
   pipeline.run(shape, {
     domain: DOMAIN,
