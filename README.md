@@ -33,6 +33,8 @@ broken build never goes live. To redeploy without a new commit:
 ```
 src/core/     Algorithm, pure TypeScript with no DOM. Reusable by a standalone app or a worker.
   rbf.ts        RBF fit/evaluate (dimension-generic), kernels in kernel.ts, solver in linalg.ts
+  pu.ts         Partition-of-unity RBF: k-d median split, sphere patches, Wendland C2 blend
+  interpolant.ts  Common fit/evaluate API over the global RBF and the PU model
   tangent.ts    Tangent-point search: lattice initialization + projected descent (dimension-generic)
   pipeline.ts   The full algorithm; records every fit as a Stage for visualization
   regions.ts    ExposedRegionOracle interface used by the pipeline

@@ -11,6 +11,7 @@ import { denseLU, type LinearSolver } from './linalg';
 
 /** A fitted RBF. Plain data: safe to post between threads and to serialize. */
 export interface RBFModel {
+  kind: 'rbf';
   dim: number;
   kernel: KernelName;
   /** n × dim, flat. */
@@ -60,6 +61,7 @@ export function fitRBF(
 
   const sol = solver.solve(A, m, b);
   return {
+    kind: 'rbf',
     dim,
     kernel,
     centers: Float64Array.from(centers),

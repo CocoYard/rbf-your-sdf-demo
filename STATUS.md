@@ -28,7 +28,7 @@ It's one long scrolling article with a sticky control bar. The controls pick the
 
 ## Results
 
-With the default 16² grid, a full run takes about 0.4 s. The Chamfer distance to the ground truth drops from 0.012 to 0.0009 on the star and from 0.020 to 0.007 on the Eiffel shape. As in the paper's figure, there's a visible improvement at iteration 7, when clamping starts. A 32² grid takes 8–11 s, because each fit is a dense solve in JavaScript; the figures fill in as each fit finishes.
+With the default 16² grid, a full run takes about 0.4 s. The Chamfer distance to the ground truth drops from 0.012 to 0.0009 on the star and from 0.020 to 0.007 on the Eiffel shape. As in the paper's figure, there's a visible improvement at iteration 7, when clamping starts. The partition-of-unity RBF is on by default. It is much faster than a single global RBF at large grids. The figures fill in as each fit finishes.
 
 ## Where I filled in details the spec left open
 

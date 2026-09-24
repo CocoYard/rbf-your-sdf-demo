@@ -3,7 +3,7 @@
 import type { ExposedRegion2D } from '../core/arcs2d';
 import type { Stage } from '../core/pipeline';
 import type { PowerCell } from '../core/power2d';
-import type { RBFModel } from '../core/rbf';
+import type { Interpolant } from '../core/interpolant';
 import type { Shape2D } from '../core/shape2d';
 import type { Box2, Samples } from '../core/types';
 import type { FieldRequest, FieldResponse, PipelineMessage, RunRequest, StageMetric } from './protocol';
@@ -133,7 +133,7 @@ export class FieldService {
     };
   }
 
-  request(key: string, model: RBFModel, box: Box2, nx: number, ny: number, cb: (v: Float32Array) => void): void {
+  request(key: string, model: Interpolant, box: Box2, nx: number, ny: number, cb: (v: Float32Array) => void): void {
     const req = { model, box, nx, ny };
     if (this.inFlight.has(key)) this.pending.set(key, { req, cb });
     else this.send(key, req, cb);

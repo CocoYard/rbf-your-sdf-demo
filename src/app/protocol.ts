@@ -3,7 +3,7 @@
 import type { ExposedRegion2D } from '../core/arcs2d';
 import type { PipelineOptions, Stage } from '../core/pipeline';
 import type { PowerCell } from '../core/power2d';
-import type { RBFModel } from '../core/rbf';
+import type { Interpolant } from '../core/interpolant';
 import type { SamplingSpec } from '../core/sampling';
 import type { Box2, Samples } from '../core/types';
 
@@ -45,7 +45,7 @@ export type PipelineMessage =
 
 export interface FieldRequest {
   reqId: number;
-  model: RBFModel;
+  model: Interpolant;
   box: Box2;
   nx: number;
   ny: number;

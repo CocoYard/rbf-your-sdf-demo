@@ -43,6 +43,10 @@ h2 .optional {
   font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid var(--muted);
   color: var(--muted); border-radius: 4px; padding: 1px 6px; transform: translateY(-4px);
 }
+p .optional {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid var(--muted);
+  color: var(--muted); border-radius: 4px; padding: 0 5px; margin-right: 4px; vertical-align: 1px;
+}
 p { margin: 0 0 14px; }
 .fine { font-size: 13px; color: var(--muted); }
 .md { margin: 8px 0 18px; overflow-x: auto; overflow-y: hidden; }
@@ -53,6 +57,7 @@ p { margin: 0 0 14px; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
 .swatch.arc { background: var(--arc); border-radius: 2px; height: 4px; width: 16px; vertical-align: 3px; }
 .swatch.fixed { background: var(--fixed); }
+.swatch.patch { background: transparent; border: 1.5px solid #6a5acd; }
 
 /* ---- Sticky control bar ---- */
 .controls {
@@ -69,7 +74,7 @@ p { margin: 0 0 14px; }
 .ctl input[type='range'] { width: 130px; }
 .ctl .row { display: flex; gap: 4px; }
 .ctl input[type='number'] { width: 70px; }
-.ctl input#eps-degen { width: 110px; }
+.ctl input#eps-degen, .ctl input#dedup { width: 110px; }
 .ctl select, .ctl input[type='number'], .ctl button, .advanced input {
   font: inherit; padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; background: white;
 }
@@ -83,6 +88,7 @@ label.check { display: flex; align-items: center; gap: 5px; color: var(--fg) !im
 .advanced[open] { flex-basis: 100%; }
 .adv-grid { display: grid; grid-template-columns: max-content max-content; gap: 6px 12px; align-items: center; margin-top: 6px; }
 .adv-grid .span2 { grid-column: span 2; }
+.adv-grid .adv-head { color: var(--muted); font-size: 12px; margin-top: 6px; border-top: 1px solid #e4e4e4; padding-top: 6px; }
 .status { margin-left: auto; color: var(--muted); font-size: 12px; min-height: 1.4em; text-align: right; }
 .status.busy::before {
   content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%;

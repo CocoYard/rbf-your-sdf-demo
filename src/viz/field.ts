@@ -5,7 +5,7 @@
  */
 
 import { marchingSquares } from '../core/contour2d';
-import type { RBFModel } from '../core/rbf';
+import type { Interpolant } from '../core/interpolant';
 import type { Box2 } from '../core/types';
 import type { FieldService } from '../app/state';
 import type { Figure } from './figure';
@@ -20,7 +20,7 @@ function colormap(v: number, range: number): [number, number, number] {
 }
 
 interface Cached {
-  model: RBFModel;
+  model: Interpolant;
   box: Box2;
   nx: number;
   ny: number;
@@ -40,7 +40,7 @@ export interface FieldStyle {
 
 export class FieldLayer {
   private cached: Cached | null = null;
-  private wanted: { model: RBFModel; box: Box2; nx: number; ny: number } | null = null;
+  private wanted: { model: Interpolant; box: Box2; nx: number; ny: number } | null = null;
   /** CSS pixels per field sample. */
   pixelsPerSample = 2;
   isoSpacing = 0.05;
@@ -53,7 +53,7 @@ export class FieldLayer {
   ) {}
 
   /** Ensure the cached field matches `model` and the current view; request it if not. */
-  update(model: RBFModel | null): void {
+  update(model: Interpolant | null): void {
     if (!model) {
       this.cached = null;
       this.wanted = null;
@@ -81,7 +81,7 @@ export class FieldLayer {
     });
   }
 
-  private build(model: RBFModel, box: Box2, nx: number, ny: number, values: Float32Array): Cached {
+  private build(model: Interpolant, box: Box2, nx: number, ny: number, values: Float32Array): Cached {
     const image = document.createElement('canvas');
     image.width = nx;
     image.height = ny;

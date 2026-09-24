@@ -9,7 +9,7 @@
  * along the tangential component of −∇f, then renormalize g onto the unit sphere.
  */
 
-import { evalRBF, evalRBFGrad, type RBFModel } from './rbf';
+import { evalModel, evalModelGrad, type Interpolant } from './interpolant';
 
 /** Near-uniform unit directions: evenly spaced angles in 2D, a Fibonacci lattice in 3D. */
 export function initialDirections(dim: number, count: number): Float64Array {
@@ -35,13 +35,13 @@ export function initialDirections(dim: number, count: number): Float64Array {
   return out;
 }
 
-function objective(model: RBFModel, x: Float64Array, d: number, g: Float64Array, y: Float64Array): number {
+function objective(model: Interpolant, x: Float64Array, d: number, g: Float64Array, y: Float64Array): number {
   for (let c = 0; c < x.length; c++) y[c] = x[c] - d * g[c];
-  return evalRBF(model, y) / d;
+  return evalModel(model, y) / d;
 }
 
 /** Best of the lattice directions: argmin sgn(d) D̃(x − d u). */
-export function bestInitialDirection(model: RBFModel, x: Float64Array, d: number, dirs: Float64Array): Float64Array {
+export function bestInitialDirection(model: Interpolant, x: Float64Array, d: number, dirs: Float64Array): Float64Array {
   const dim = x.length;
   const g = new Float64Array(dim);
   const y = new Float64Array(dim);
@@ -75,7 +75,7 @@ export interface DescentResult {
 }
 
 export function refineDirection(
-  model: RBFModel,
+  model: Interpolant,
   x: Float64Array,
   d: number,
   g0: Float64Array,
@@ -92,7 +92,7 @@ export function refineDirection(
 
   for (let c = 0; c < dim; c++) y[c] = x[c] - d * g[c];
   path.push(...y);
-  let f = evalRBFGrad(model, y, grad) / d;
+  let f = evalModelGrad(model, y, grad) / d;
   let it = 0;
 
   for (; it < opts.maxIters; it++) {
@@ -131,7 +131,7 @@ export function refineDirection(
     g = Float64Array.from(gNew);
     for (let c = 0; c < dim; c++) y[c] = yNew[c];
     path.push(...y);
-    f = evalRBFGrad(model, y, grad) / d;
+    f = evalModelGrad(model, y, grad) / d;
   }
   return { g, f, iterations: it, path: Float64Array.from(path) };
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { distanceToArcs, exposedArcs } from '../src/core/arcs2d';
 import { marchingSquares } from '../src/core/contour2d';
+import { evalModel, type Interpolant } from '../src/core/interpolant';
 import { denseLU } from '../src/core/linalg';
 import { Status, defaultOptions, isConstraint, runPipeline } from '../src/core/pipeline';
 import { powerDiagram2D } from '../src/core/power2d';
+import { defaultPUOptions, evalPU, evalPUGrad, evalPUGrid2D, fitPU } from '../src/core/pu';
 import { evalRBF, evalRBFGrad, fitRBF } from '../src/core/rbf';
 import { computeRegions2D, regionOracle2D } from '../src/core/regions2d';
 import { samplePositions2D, sampleShapeSDF } from '../src/core/sampling';
@@ -164,26 +166,27 @@ describe('contouring', () => {
 });
 
 describe('pipeline', () => {
-  function levelSetError(model: ReturnType<typeof fitRBF>, shape: Shape2D) {
+  function levelSetError(model: Interpolant, shape: Shape2D) {
     // Mean |D̃| along the ground-truth boundary.
     let total = 0, count = 0;
     for (const L of shape.loops) for (let k = 0; k < L.length; k += 2) {
       const j = (k + 2) % L.length;
       for (let t = 0; t < 1; t += 0.1) {
-        total += Math.abs(evalRBF(model, [L[k] + t * (L[j] - L[k]), L[k + 1] + t * (L[j + 1] - L[k + 1])]));
+        total += Math.abs(evalModel(model, [L[k] + t * (L[j] - L[k]), L[k + 1] + t * (L[j + 1] - L[k + 1])]));
         count++;
       }
     }
     return total / count;
   }
 
-  for (const useRegions of [false, true]) {
-    it(`reduces error on a rotated square (regions: ${useRegions})`, () => {
+  for (const [useRegions, method] of [[false, 'global'], [true, 'global'], [true, 'pu']] as const) {
+    it(`reduces error on a rotated square (regions: ${useRegions}, ${method})`, () => {
       const c = Math.cos(0.35), s = Math.sin(0.35);
       const L = square.loops[0].map((_, k, a) => (k % 2 === 0 ? c * a[k] - s * a[k + 1] : s * a[k - 1] + c * a[k]));
       const shape: Shape2D = { loops: [Float64Array.from(L)] };
       const samples = sampleShapeSDF(shape, samplePositions2D({ kind: 'grid', resolution: 12 }, domain));
       const opts = { ...defaultOptions(2), iterations: 6 };
+      opts.interpolant = { method, pu: { ...defaultPUOptions(), maxLeafPoints: 40, maxPatchPoints: 120 } };
       const oracle = useRegions ? regionOracle2D(samples, computeRegions2D(samples, domain), 2e-5) : null;
       const stages = runPipeline(samples, opts, oracle);
       expect(stages.length).toBe(1 + opts.iterations + (stages[1].kind === 'collapsed' ? 1 : 0));
@@ -193,6 +196,48 @@ describe('pipeline', () => {
       const last = stages[stages.length - 1];
       expect([...last.status].filter(isConstraint).length).toBeGreaterThan(20);
       if (useRegions) expect([...stages[1].status].filter((x) => x === Status.Fixed).length).toBeGreaterThan(0);
+      if (method === 'pu') expect(last.model.kind === 'pu' && last.model.patches.length).toBeGreaterThan(1);
     });
   }
+});
+
+describe('partition of unity', () => {
+  const pts = samplePositions2D({ kind: 'scattered', count: 400, seed: 3 }, domain);
+  const n = pts.length / 2;
+  const opts = { ...defaultPUOptions(), maxLeafPoints: 40, maxPatchPoints: 120 };
+
+  it('splits into several patches and interpolates every constraint', () => {
+    const vals = Float64Array.from({ length: n }, (_, i) => Math.hypot(pts[2 * i] - 0.1, pts[2 * i + 1]) - 0.5);
+    const m = fitPU(2, pts, vals, 'cubic', opts);
+    expect(m.patches.length).toBeGreaterThan(4);
+    for (let i = 0; i < n; i++) expect(evalPU(m, pts, 2 * i)).toBeCloseTo(vals[i], 7);
+  });
+
+  it('reproduces linear functions', () => {
+    const vals = Float64Array.from({ length: n }, (_, i) => 0.7 * pts[2 * i] - 1.3 * pts[2 * i + 1] + 0.2);
+    const m = fitPU(2, pts, vals, 'cubic', opts);
+    for (const q of [[0.31, -0.42], [-0.9, 0.85], [0, 0]]) expect(evalPU(m, q)).toBeCloseTo(0.7 * q[0] - 1.3 * q[1] + 0.2, 7);
+  });
+
+  it('blended gradient (with weight derivatives) matches finite differences', () => {
+    const vals = Float64Array.from({ length: n }, (_, i) => Math.sin(3 * pts[2 * i]) * Math.cos(2 * pts[2 * i + 1]));
+    const m = fitPU(2, pts, vals, 'cubic', opts);
+    const h = 1e-6;
+    for (const p of [[0.123, -0.456], [-0.61, 0.2], [0.8, 0.77]]) {
+      const g = new Float64Array(2);
+      const f = evalPUGrad(m, p, g);
+      expect(f).toBeCloseTo(evalPU(m, p), 12);
+      expect(g[0]).toBeCloseTo((evalPU(m, [p[0] + h, p[1]]) - evalPU(m, [p[0] - h, p[1]])) / (2 * h), 5);
+      expect(g[1]).toBeCloseTo((evalPU(m, [p[0], p[1] + h]) - evalPU(m, [p[0], p[1] - h])) / (2 * h), 5);
+    }
+  });
+
+  it('lattice evaluation matches pointwise evaluation', () => {
+    const vals = Float64Array.from({ length: n }, (_, i) => pts[2 * i] ** 2 - pts[2 * i + 1]);
+    const m = fitPU(2, pts, vals, 'cubic', opts);
+    const grid = evalPUGrid2D(m, -1.2, -1.2, 1.2, 1.2, 25, 25);
+    for (let j = 0; j < 25; j += 3) for (let i = 0; i < 25; i += 3) {
+      expect(grid[j * 25 + i]).toBeCloseTo(evalPU(m, [-1.2 + 0.1 * i, -1.2 + 0.1 * j]), 9);
+    }
+  });
 });

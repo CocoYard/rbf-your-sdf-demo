@@ -4,13 +4,13 @@ import './style.css';
 
 import type { Arc } from './core/arcs2d';
 import { Status, defaultOptions, isConstraint, type Stage } from './core/pipeline';
-import { evalRBF, type RBFModel } from './core/rbf';
+import { evalModel, type Interpolant } from './core/interpolant';
 import type { SamplingSpec } from './core/sampling';
 import { closestPointOnShape, type Shape2D } from './core/shape2d';
 import type { Samples } from './core/types';
 import { DOMAIN, FieldService, PipelineClient, Store, type DemoState } from './app/state';
 import { svgToShape } from './io/svg';
-import { drawArcs, drawCells, drawCircles, drawPoint, drawPolyline, drawSampleDots, drawShape, pickSample } from './viz/draw';
+import { drawArcs, drawCells, drawCircles, drawPatches, drawPoint, drawPolyline, drawSampleDots, drawShape, pickSample } from './viz/draw';
 import { FieldLayer } from './viz/field';
 import { Figure } from './viz/figure';
 import { Plot } from './viz/plot';
@@ -49,9 +49,15 @@ const ui = {
   iters: $<HTMLInputElement>('iters'),
   itersOut: $<HTMLOutputElement>('iters-out'),
   useRegions: $<HTMLInputElement>('use-regions'),
+  usePU: $<HTMLInputElement>('use-pu'),
+  puOverlap: $<HTMLInputElement>('pu-overlap'),
+  puLeaf: $<HTMLInputElement>('pu-leaf'),
+  puPatch: $<HTMLInputElement>('pu-patch'),
+  puMin: $<HTMLInputElement>('pu-min'),
   kernel: $<HTMLSelectElement>('kernel'),
   descentIters: $<HTMLInputElement>('descent-iters'),
   epsDegen: $<HTMLInputElement>('eps-degen'),
+  dedup: $<HTMLInputElement>('dedup'),
   deferIsolated: $<HTMLInputElement>('defer-isolated'),
   filterInfeasible: $<HTMLInputElement>('filter-infeasible'),
   monotone: $<HTMLInputElement>('monotone'),
@@ -91,6 +97,15 @@ function run(): void {
   options.filterInfeasible = ui.filterInfeasible.checked;
   options.monotoneFeasibility = ui.monotone.checked;
   options.clamp.enabled = ui.clamp.checked;
+  if (ui.dedup.value !== '' && Number.isFinite(+ui.dedup.value)) options.dedupRadius = Math.max(0, +ui.dedup.value);
+  const int = (el: HTMLInputElement, fallback: number, min: number) => Math.max(min, Math.round(+el.value || fallback));
+  options.interpolant.method = ui.usePU.checked ? 'pu' : 'global';
+  options.interpolant.pu = {
+    overlap: Math.max(0, Number.isFinite(+ui.puOverlap.value) ? +ui.puOverlap.value : 0.25),
+    maxLeafPoints: int(ui.puLeaf, 200, 4),
+    maxPatchPoints: int(ui.puPatch, 675, 4),
+    minPatchPoints: int(ui.puMin, 10, 4),
+  };
   pipeline.run(shape, {
     domain: DOMAIN,
     sampling,
@@ -147,7 +162,7 @@ ui.upload.addEventListener('change', async () => {
 });
 for (const r of document.querySelectorAll<HTMLInputElement>('input[name=sampling]')) r.addEventListener('change', () => runSoon(0));
 for (const el of [ui.gridN, ui.count, ui.iters]) el.addEventListener('input', () => runSoon());
-for (const el of [ui.seed, ui.kernel, ui.descentIters, ui.epsDegen, ui.useRegions, ui.deferIsolated, ui.filterInfeasible, ui.monotone, ui.clamp]) {
+for (const el of [ui.seed, ui.kernel, ui.descentIters, ui.epsDegen, ui.dedup, ui.useRegions, ui.usePU, ui.puOverlap, ui.puLeaf, ui.puPatch, ui.puMin, ui.deferIsolated, ui.filterInfeasible, ui.monotone, ui.clamp]) {
   el.addEventListener('change', () => runSoon(0));
 }
 ui.reseed.addEventListener('click', () => {
@@ -185,6 +200,17 @@ function legend(items: [string, string, string?][]): string {
 }
 
 const fmt = (v: number, digits = 3) => (Number.isFinite(v) ? v.toFixed(digits) : '—');
+/** Error values: fixed-point normally, scientific once they would round to zeros. */
+const fmtErr = (v: number) => (!Number.isFinite(v) ? '—' : Math.abs(v) < 1e-3 && v !== 0 ? v.toExponential(2) : v.toFixed(4));
+
+/** " · k PU patches (sizes a–b)" for a partition-of-unity fit, else "". */
+function puSummary(model: Interpolant | null | undefined): string {
+  if (!model || model.kind !== 'pu') return '';
+  const s = model.stats;
+  return ` · ${s.patches} PU patch${s.patches === 1 ? '' : 'es'} over ${s.constraints} constraints (${s.minSize}–${s.maxSize} each)`;
+}
+const patchLegend = (model: Interpolant | null | undefined): [string, string, string][] =>
+  model?.kind === 'pu' ? [['#6a5acd', 'PU patch support', 'line']] : [];
 
 function highlightCircle(ctx: CanvasRenderingContext2D, fig: Figure, s: Samples, i: number, width = 2.5): void {
   const d = s.values[i];
@@ -300,7 +326,7 @@ function info1(): void {
   let head = `${n} samples. Hover over a sample to see its circle and its true tangent point (the closest point on the curve).`;
   if (hover1 >= 0) {
     const i = hover1;
-    head = `Sample ${i}: <b>x</b> = (${fmt(s.samples.points[2 * i])}, ${fmt(s.samples.points[2 * i + 1])}), <b>d</b> = ${fmt(s.samples.values[i], 4)}`;
+    head = `Sample ${i}: <b>x</b> = (${fmt(s.samples.points[2 * i])}, ${fmt(s.samples.points[2 * i + 1])}), <b>d</b> = ${fmtErr(s.samples.values[i])}`;
   }
   el.innerHTML = head + legend([
     [colors.positive, 'd > 0 (outside)', 'ring'], [colors.negative, 'd < 0 (inside)', 'ring'], [colors.highlight, 'true tangent point'],
@@ -407,6 +433,7 @@ const f3Colors = toggle(tb3, 'field', true, () => fig3.redraw());
 const f3Iso = toggle(tb3, 'isolines', true, () => fig3.redraw());
 const f3Shape = toggle(tb3, 'ground truth', true, () => fig3.redraw());
 const f3Circles = toggle(tb3, 'circles', false, () => fig3.redraw());
+const f3Patches = toggle(tb3, 'PU patches', false, () => fig3.redraw());
 let layer3: FieldLayer;
 const fig3 = new Figure($('fig-rbf0'), {
   home: HOME,
@@ -416,6 +443,7 @@ const fig3 = new Figure($('fig-rbf0'), {
     layer3.draw(ctx, { showColors: f3Colors(), showIsolines: f3Iso(), showZero: false, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (s.shape && f3Shape()) drawShape(ctx, fig, s.shape, { stroke: colors.groundTruth, width: 1.2, dash: [5, 4] });
     if (s.samples && f3Circles()) drawCircles(ctx, fig, s.samples, { alpha: 0.5, fade: true });
+    if (f3Patches()) drawPatches(ctx, fig, s.stages[0]?.model);
     layer3.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (s.samples) drawSampleDots(ctx, fig, s.samples, 2);
   },
@@ -426,8 +454,8 @@ allFigures.push(fig3);
 function info3(): void {
   const s = store.state;
   const m = s.metrics[0];
-  $('info-rbf0').innerHTML = (m ? `Samples only: Chamfer distance to ground truth ${fmt(m.chamfer, 4)}, mean |D̃| on ground truth ${fmt(m.meanAbs, 4)}` : '') +
-    legend([[colors.levelSet, 'zero level set of D̃', 'line'], [colors.groundTruth, 'ground truth', 'line dashed'],
+  $('info-rbf0').innerHTML = (m ? `Samples only: Chamfer distance to ground truth ${fmtErr(m.chamfer)}, mean |D̃| on ground truth ${fmtErr(m.meanAbs)}${puSummary(s.stages[0]?.model)}` : '') +
+    legend([...patchLegend(s.stages[0]?.model), [colors.levelSet, 'zero level set of D̃', 'line'], [colors.groundTruth, 'ground truth', 'line dashed'],
       ['rgb(244,165,130)', 'D̃ > 0'], ['rgb(146,197,222)', 'D̃ < 0']]);
 }
 
@@ -487,7 +515,7 @@ playBtn4.addEventListener('click', () => {
   anim4 = requestAnimationFrame(tick);
 });
 
-function descentContext(s: DemoState): { stage: Stage; model: RBFModel } | null {
+function descentContext(s: DemoState): { stage: Stage; model: Interpolant } | null {
   const idx = projectionIndex(s, iter4);
   if (idx < 1 || !s.stages[idx - 1]) return null;
   return { stage: s.stages[idx], model: s.stages[idx - 1].model };
@@ -570,7 +598,7 @@ function plot4Update(): void {
     p[0] = cx + r * Math.cos(t);
     p[1] = cy + r * Math.sin(t);
     xs[k] = t;
-    ys[k] = evalRBF(dc.model, p) / d;
+    ys[k] = evalModel(dc.model, p) / d;
   }
   const angleOf = (x: number, y: number) => {
     let t = Math.atan2(y - cy, x - cx);
@@ -585,19 +613,19 @@ function plot4Update(): void {
     for (let k = 0; k <= upto; k++) {
       p[0] = path[2 * k];
       p[1] = path[2 * k + 1];
-      points.push({ x: angleOf(p[0], p[1]), y: evalRBF(dc.model, p) / d, color: k === 0 ? '#333' : colors.descent, hollow: k === 0 });
+      points.push({ x: angleOf(p[0], p[1]), y: evalModel(dc.model, p) / d, color: k === 0 ? '#333' : colors.descent, hollow: k === 0 });
     }
   }
   const st = dc.stage.status[i];
   if (statusStyle[st] && Number.isFinite(dc.stage.tangents[2 * i]) && (!path || step4 >= path.length / 2 - 1)) {
     p[0] = dc.stage.tangents[2 * i];
     p[1] = dc.stage.tangents[2 * i + 1];
-    points.push({ x: angleOf(p[0], p[1]), y: evalRBF(dc.model, p) / d, color: statusStyle[st].color, hollow: statusStyle[st].hollow });
+    points.push({ x: angleOf(p[0], p[1]), y: evalModel(dc.model, p) / d, color: statusStyle[st].color, hollow: statusStyle[st].hollow });
   }
   const bands = s.usedRegions && s.regions[i]
     ? arcBands(s.regions[i].arcs).map(([a, b]) => ({ x0: a, x1: b, color: 'rgba(224, 138, 0, 0.18)' }))
     : [];
-  title.textContent = `Sample ${i}: f(θ) = D̃(point at angle θ on its circle) / d, with d = ${fmt(d, 4)}` + (bands.length ? ' (orange: exposed arcs)' : '');
+  title.textContent = `Sample ${i}: f(θ) = D̃(point at angle θ on its circle) / d, with d = ${fmtErr(d)}` + (bands.length ? ' (orange: exposed arcs)' : '');
   plot4.set({
     series: [{ xs, ys, color: '#333', width: 1.5 }],
     xRange: [0, TWO_PI],
@@ -623,7 +651,7 @@ function info4(): void {
     const st = dc.stage.status[i];
     const path = dc.stage.paths?.[i];
     const name = statusStyle[st]?.label ?? (st === Status.Deferred ? 'deferred to the next iteration' : st === Status.OnSurface ? 'on the surface' : 'none');
-    head = `Sample ${i}: d = ${fmt(s.samples.values[i], 4)} · ${name}` + (path ? ` · ${path.length / 2 - 1} descent steps` : '');
+    head = `Sample ${i}: d = ${fmtErr(s.samples.values[i])} · ${name}` + (path ? ` · ${path.length / 2 - 1} descent steps` : '');
   }
   el.innerHTML = head + legend([
     ...tangentLegend([Status.Projected, Status.Fixed, Status.Infeasible, Status.KeptPrevious, Status.Clamped]),
@@ -671,6 +699,7 @@ const f5Iso = toggle(tb5, 'isolines', false, () => fig5.redraw());
 const f5Prev = toggle(tb5, 'previous level set', true, () => fig5.redraw());
 const f5Shape = toggle(tb5, 'ground truth', true, () => fig5.redraw());
 const f5Circles = toggle(tb5, 'circles', false, () => fig5.redraw());
+const f5Patches = toggle(tb5, 'PU patches', false, () => fig5.redraw());
 let layer5: FieldLayer;
 let layer5prev: FieldLayer;
 const fig5 = new Figure($('fig-refit'), {
@@ -684,6 +713,7 @@ const fig5 = new Figure($('fig-refit'), {
     layer5.draw(ctx, { showColors: f5Colors(), showIsolines: f5Iso(), showZero: false, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (s.shape && f5Shape()) drawShape(ctx, fig, s.shape, { stroke: colors.groundTruth, width: 1.2, dash: [5, 4] });
     if (s.samples && f5Circles()) drawCircles(ctx, fig, s.samples, { alpha: 0.4, fade: true });
+    if (f5Patches()) drawPatches(ctx, fig, stage?.model);
     if (f5Prev()) layer5prev.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.previousLevelSet, zeroWidth: 1.8, zeroDash: [6, 4] });
     layer5.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (s.samples) drawSampleDots(ctx, fig, s.samples, 1.8, 0.8);
@@ -704,7 +734,7 @@ function info5(): void {
   }
   const before = s.metrics[idx - 1], after = s.metrics[idx];
   const constraints = [...s.stages[idx].status].filter(isConstraint).length;
-  el.innerHTML = `${constraints} tangent points added as zero-valued constraints. Chamfer distance to ground truth: ${fmt(before.chamfer, 4)} → <b>${fmt(after.chamfer, 4)}</b>` +
+  el.innerHTML = `${constraints} tangent points added as zero-valued constraints. Chamfer distance to ground truth: ${fmtErr(before.chamfer)} → <b>${fmtErr(after.chamfer)}</b>${puSummary(s.stages[idx].model)}` +
     legend([
       [colors.levelSet, 'new level set', 'line'], [colors.previousLevelSet, `previous (${s.stages[idx - 1].label.toLowerCase()})`, 'line dashed'],
       ...tangentLegend([Status.Projected, Status.Fixed]),
@@ -725,11 +755,12 @@ const playBtn6 = document.createElement('button');
 playBtn6.type = 'button';
 playBtn6.textContent = '▶ Play';
 tb6.appendChild(playBtn6);
-const f6Colors = toggle(tb6, 'field', false, () => fig6.redraw());
+const f6Colors = toggle(tb6, 'field', true, () => fig6.redraw());
 const f6Initial = toggle(tb6, 'initial level set', true, () => fig6.redraw());
 const f6Shape = toggle(tb6, 'ground truth', true, () => fig6.redraw());
 const f6Tangents = toggle(tb6, 'tangent points', true, () => fig6.redraw());
 const f6Circles = toggle(tb6, 'circles', false, () => fig6.redraw());
+const f6Patches = toggle(tb6, 'PU patches', false, () => fig6.redraw());
 
 function currentStage6(s: DemoState): number {
   const n = s.stages.length;
@@ -772,6 +803,7 @@ const fig6 = new Figure($('fig-iterate'), {
     layer6.draw(ctx, { showColors: f6Colors(), showIsolines: f6Colors(), showZero: false, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (s.shape && f6Shape()) drawShape(ctx, fig, s.shape, { fill: f6Colors() ? undefined : colors.shapeFill, stroke: colors.groundTruth, width: 1.2 });
     if (s.samples && f6Circles()) drawCircles(ctx, fig, s.samples, { alpha: 0.4, fade: true });
+    if (f6Patches()) drawPatches(ctx, fig, stage?.model);
     if (f6Initial() && k > 0) layer6init.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.previousLevelSet, zeroWidth: 1.5, zeroDash: [6, 4] });
     layer6.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (stage && f6Tangents()) drawTangents(ctx, fig, stage, { onlyConstraints: true, radius: 2.6 });
@@ -800,7 +832,7 @@ function update6(): void {
   }
   const m = s.metrics[k];
   const counts = statusCounts(s.stages[k]);
-  el.innerHTML = `<b>${s.stages[k].label}</b> · Chamfer ${fmt(m?.chamfer ?? NaN, 4)} · mean |D̃| on ground truth ${fmt(m?.meanAbs ?? NaN, 4)}${counts ? ` · ${counts}` : ''}` +
+  el.innerHTML = `<b>${s.stages[k].label}</b> · Chamfer ${fmtErr(m?.chamfer ?? NaN)} · mean |D̃| on ground truth ${fmtErr(m?.meanAbs ?? NaN)}${counts ? ` · ${counts}` : ''}${puSummary(s.stages[k].model)}` +
     legend([
       [colors.levelSet, 'zero level set', 'line'], [colors.previousLevelSet, 'initial level set (samples only)', 'line dashed'],
       [colors.groundTruth, 'ground truth', 'line'], ...tangentLegend([Status.Projected, Status.Fixed, Status.Clamped]),

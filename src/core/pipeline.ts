@@ -11,8 +11,8 @@
  */
 
 import type { KernelName } from './kernel';
+import { defaultInterpolantOptions, evalModel, fitInterpolant, type Interpolant, type InterpolantOptions } from './interpolant';
 import { denseLU, type LinearSolver } from './linalg';
-import { evalRBF, fitRBF, type RBFModel } from './rbf';
 import type { ExposedRegionOracle } from './regions';
 import { bestInitialDirection, initialDirections, refineDirection } from './tangent';
 import type { Samples } from './types';
@@ -47,6 +47,8 @@ export function isConstraint(s: number): boolean {
 
 export interface PipelineOptions {
   kernel: KernelName;
+  /** Global RBF, or partition of unity of local RBFs. */
+  interpolant: InterpolantOptions;
   /** Number of outer iterations (projection + refit). */
   iterations: number;
   /** Lattice size for the first direction guess (paper: 64). */
@@ -74,6 +76,7 @@ export interface PipelineOptions {
 export function defaultOptions(scale = 1): PipelineOptions {
   return {
     kernel: 'cubic',
+    interpolant: defaultInterpolantOptions(),
     iterations: 10,
     initDirections: 64,
     descent: { maxIters: 10, firstMaxStep: 0.2, maxStep: 1, gradTol: 1e-4 },
@@ -96,7 +99,7 @@ export interface Stage {
   tangents: Float64Array;
   status: Uint8Array;
   /** The fit of the samples plus the constraint tangent points. */
-  model: RBFModel;
+  model: Interpolant;
   /**
    * Projection stages only: per sample, the descent path (points y visited, starting
    * from the initial guess) taken against the previous stage's model; null if the
@@ -143,7 +146,7 @@ function fitWithTangents(
   status: Uint8Array,
   opts: PipelineOptions,
   solver: LinearSolver,
-): RBFModel {
+): Interpolant {
   const { dim } = samples;
   const n = samples.values.length;
   const cell = Math.max(opts.dedupRadius, 1e-12);
@@ -198,7 +201,7 @@ function fitWithTangents(
       else add(tangents, i * dim, 0);
     }
   }
-  return fitRBF(dim, Float64Array.from(pts), Float64Array.from(vals), opts.kernel, solver);
+  return fitInterpolant(dim, Float64Array.from(pts), Float64Array.from(vals), opts.kernel, opts.interpolant, solver);
 }
 
 export function runPipeline(
@@ -223,7 +226,7 @@ export function runPipeline(
 
   // Stage 0: samples only.
   callbacks.onProgress?.('Fitting RBF to samples');
-  const model0 = fitRBF(dim, points, values, opts.kernel, solver);
+  const model0 = fitInterpolant(dim, points, values, opts.kernel, opts.interpolant, solver);
   push({
     kind: 'samples', iteration: 0, label: 'Samples only',
     tangents: Float64Array.from(tangents), status: Uint8Array.from(status), model: model0,
@@ -238,7 +241,7 @@ export function runPipeline(
       if (!cands) continue;
       let best = Infinity, bestK = -1;
       for (let k = 0; k < cands.length / dim; k++) {
-        const v = Math.abs(evalRBF(model0, cands, k * dim));
+        const v = Math.abs(evalModel(model0, cands, k * dim));
         if (v < best) {
           best = v;
           bestK = k;

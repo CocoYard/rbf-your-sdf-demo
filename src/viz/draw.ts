@@ -1,6 +1,7 @@
 /** Drawing primitives for figures (world coordinates → figure screen space). */
 
 import type { ExposedRegion2D } from '../core/arcs2d';
+import type { Interpolant } from '../core/interpolant';
 import type { PowerCell } from '../core/power2d';
 import type { Shape2D } from '../core/shape2d';
 import type { Samples } from '../core/types';
@@ -169,4 +170,27 @@ export function pickSample(fig: Figure, s: Samples | null, world: [number, numbe
     }
   }
   return best;
+}
+
+/** Partition-of-unity patch supports (one hue per patch); nothing for a global RBF. */
+export function drawPatches(ctx: CanvasRenderingContext2D, fig: Figure, model: Interpolant | null | undefined): void {
+  if (!model || model.kind !== 'pu') return;
+  ctx.save();
+  model.patches.forEach((p, k) => {
+    const hue = (k * 137.508) % 360;
+    const [x, y] = fig.toScreen(p.center[0], p.center[1]);
+    const r = p.radius * fig.scale;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = `hsla(${hue}, 65%, 55%, 0.07)`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(${hue}, 60%, 42%, 0.8)`;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y);
+    ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4);
+    ctx.stroke();
+  });
+  ctx.restore();
 }

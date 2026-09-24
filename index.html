@@ -26,13 +26,13 @@
     <div class="ctl">
       <label for="shape">Shape</label>
       <select id="shape">
-        <option value="examples/box.svg">Box</option>
-        <option value="examples/square.svg">Rotated square</option>
+        <option value="examples/eiffel.svg">Eiffel</option>
+        <option value="examples/horse.svg">Horse</option>
         <option value="examples/star.svg">Star</option>
+        <option value="examples/square.svg">Rotated square</option>
+        <option value="examples/box.svg">Box</option>
         <option value="examples/blob.svg">Blob</option>
         <option value="examples/ring.svg">Ring</option>
-        <option value="examples/horse.svg">Horse</option>
-        <option value="examples/eiffel.svg">Eiffel</option>
         <option value="upload">Upload SVG…</option>
       </select>
       <input type="file" id="upload" accept=".svg,image/svg+xml" hidden />
@@ -46,11 +46,11 @@
     </div>
     <div class="ctl" id="ctl-grid">
       <label for="grid-n">Grid <output id="grid-n-out">16²</output></label>
-      <input type="range" id="grid-n" min="4" max="32" value="16" />
+      <input type="range" id="grid-n" min="4" max="60" value="16" />
     </div>
     <div class="ctl" id="ctl-count" hidden>
       <label for="count">Count <output id="count-out">250</output></label>
-      <input type="range" id="count" min="20" max="1000" step="10" value="250" />
+      <input type="range" id="count" min="20" max="3600" step="10" value="250" />
     </div>
     <div class="ctl" id="ctl-seed" hidden>
       <label for="seed">Seed</label>
@@ -62,6 +62,9 @@
     </div>
     <div class="ctl">
       <label class="check"><input type="checkbox" id="use-regions" checked /> Exposed-arc step</label>
+    </div>
+    <div class="ctl">
+      <label class="check"><input type="checkbox" id="use-pu" checked /> Partition of unity</label>
     </div>
     <details class="ctl advanced">
       <summary>Advanced</summary>
@@ -76,10 +79,21 @@
         <input type="number" id="descent-iters" min="1" max="200" value="10" />
         <label for="eps-degen">ε<sub>degen</sub> (collapse threshold)</label>
         <input type="number" id="eps-degen" value="0.00002" step="0.00001" min="0" />
+        <label for="dedup">Deduplicate tolerance</label>
+        <input type="number" id="dedup" value="0.0005" step="0.0001" min="0" />
         <label class="check span2"><input type="checkbox" id="defer-isolated" checked /> Defer isolated samples in iteration 1</label>
         <label class="check span2"><input type="checkbox" id="filter-infeasible" checked /> Cull projections outside the exposed arcs</label>
         <label class="check span2"><input type="checkbox" id="monotone" checked /> Keep previous feasible point instead of regressing</label>
         <label class="check span2"><input type="checkbox" id="clamp" checked /> Clamp near-misses onto tiny exposed regions (iteration ≥ 7)</label>
+        <span class="adv-head span2">Partition of unity</span>
+        <label for="pu-overlap">Overlap λ</label>
+        <input type="number" id="pu-overlap" value="0.25" step="0.05" min="0" />
+        <label for="pu-leaf">Max points per k-d leaf</label>
+        <input type="number" id="pu-leaf" value="200" step="10" min="4" />
+        <label for="pu-patch">Max points per patch</label>
+        <input type="number" id="pu-patch" value="675" step="25" min="4" />
+        <label for="pu-min">Min points per patch</label>
+        <input type="number" id="pu-min" value="10" step="1" min="4" />
       </div>
     </details>
     <div class="status" id="status" aria-live="polite"></div>
@@ -144,6 +158,20 @@
         The coefficients come from one symmetric linear system. The <span class="lvl">zero level set</span> interpolates the
         samples' values, but with the samples alone it floats off the true curve and rounds off sharp features,
         because nothing tells it where the surface actually is.
+      </p>
+      <p>
+        One dense solve costs <span class="m">O(n^3)</span>, so by default we use a <b>partition of unity</b> (turn it off above for a single global RBF):
+        a k-d tree splits the constraints at the median of the longest axis until each leaf holds at most 200. Each leaf becomes a
+        <span class="swatch patch"></span>disk patch, centered at the leaf's mean with the leaf's radius inflated by
+        <span class="m">1+\lambda</span> so neighbors overlap. A local RBF <span class="m">f_j</span> is fitted to the constraints
+        inside each disk, and the local fits are blended with Wendland weights:
+      </p>
+      <div class="md">\tilde D(\mathbf{x}) = \frac{\sum_j \hat w_j(\mathbf{x})\, f_j(\mathbf{x})}{\sum_k \hat w_k(\mathbf{x})}, \qquad
+        \hat w_j(\mathbf{x}) = \left(1-\tfrac{r}{R_j}\right)_+^4 \left(4\tfrac{r}{R_j}+1\right), \quad r = \|\mathbf{x}-\boldsymbol\xi_j\|.</div>
+      <p>
+        Every constraint lies inside every patch whose weight is nonzero there, so <span class="m">\tilde D</span> still interpolates
+        all of them. The partition is rebuilt at every fit, because the tangent points move. Lower the leaf and patch sizes under
+        Advanced to see more patches.
       </p>
       <figure class="demo-fig">
         <div class="fig-toolbar" id="tb-rbf0"></div>
@@ -220,7 +248,7 @@
       <h2>Notes</h2>
       <p>
         This demo is a simplified 2D version of the method. The full 3D method uses the same ideas with spheres instead of circles,
-        a partition-of-unity RBF for speed, BFGS instead of plain projected gradient descent, and dual contouring to extract a mesh.
+        BFGS instead of plain projected gradient descent, and dual contouring to extract a mesh.
         All algorithm code runs in your browser in a Web Worker and is independent of the page.
       </p>
       <p class="fine">
