@@ -729,6 +729,7 @@ const f6Colors = toggle(tb6, 'field', false, () => fig6.redraw());
 const f6Initial = toggle(tb6, 'initial level set', true, () => fig6.redraw());
 const f6Shape = toggle(tb6, 'ground truth', true, () => fig6.redraw());
 const f6Tangents = toggle(tb6, 'tangent points', true, () => fig6.redraw());
+const f6Circles = toggle(tb6, 'circles', false, () => fig6.redraw());
 
 function currentStage6(s: DemoState): number {
   const n = s.stages.length;
@@ -770,6 +771,7 @@ const fig6 = new Figure($('fig-iterate'), {
     layer6init.update(f6Initial() && k > 0 ? s.stages[0]?.model ?? null : null);
     layer6.draw(ctx, { showColors: f6Colors(), showIsolines: f6Colors(), showZero: false, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (s.shape && f6Shape()) drawShape(ctx, fig, s.shape, { fill: f6Colors() ? undefined : colors.shapeFill, stroke: colors.groundTruth, width: 1.2 });
+    if (s.samples && f6Circles()) drawCircles(ctx, fig, s.samples, { alpha: 0.4, fade: true });
     if (f6Initial() && k > 0) layer6init.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.previousLevelSet, zeroWidth: 1.5, zeroDash: [6, 4] });
     layer6.draw(ctx, { showColors: false, showIsolines: false, showZero: true, zeroColor: colors.levelSet, zeroWidth: 2.5 });
     if (stage && f6Tangents()) drawTangents(ctx, fig, stage, { onlyConstraints: true, radius: 2.6 });

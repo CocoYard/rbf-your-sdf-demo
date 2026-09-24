@@ -69,6 +69,7 @@ p { margin: 0 0 14px; }
 .ctl input[type='range'] { width: 130px; }
 .ctl .row { display: flex; gap: 4px; }
 .ctl input[type='number'] { width: 70px; }
+.ctl input#eps-degen { width: 110px; }
 .ctl select, .ctl input[type='number'], .ctl button, .advanced input {
   font: inherit; padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; background: white;
 }
