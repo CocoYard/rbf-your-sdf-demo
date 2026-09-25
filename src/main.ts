@@ -65,6 +65,20 @@ const ui = {
   status: $('status'),
 };
 
+// Advanced settings live in a side panel.
+const advToggle = $<HTMLButtonElement>('adv-toggle');
+const advPanel = $('adv-panel');
+function setAdvancedOpen(open: boolean): void {
+  advPanel.hidden = !open;
+  advToggle.setAttribute('aria-expanded', String(open));
+  document.body.classList.toggle('adv-open', open);
+}
+advToggle.addEventListener('click', () => setAdvancedOpen(advPanel.hidden));
+$('adv-close').addEventListener('click', () => setAdvancedOpen(false));
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !advPanel.hidden) setAdvancedOpen(false);
+});
+
 let shape: Shape2D | null = null;
 const uploaded = new Map<string, string>();
 
@@ -695,6 +709,15 @@ function update4(): void {
 // §5 Refit
 // ---------------------------------------------------------------------------
 const tb5 = $('tb-refit');
+let iter5 = 1;
+const iterLabel5 = document.createElement('label');
+iterLabel5.innerHTML = 'Iteration <select></select>';
+const iterSelect5 = iterLabel5.querySelector('select')!;
+tb5.appendChild(iterLabel5);
+iterSelect5.addEventListener('change', () => {
+  iter5 = +iterSelect5.value;
+  update5();
+});
 const f5Colors = toggle(tb5, 'field', true, () => fig5.redraw());
 const f5Iso = toggle(tb5, 'isolines', false, () => fig5.redraw());
 const f5Prev = toggle(tb5, 'previous level set', true, () => fig5.redraw());
@@ -707,7 +730,7 @@ const fig5 = new Figure($('fig-refit'), {
   home: HOME,
   onDraw: (fig, ctx) => {
     const s = store.state;
-    const idx = projectionIndex(s, 1);
+    const idx = projectionIndex(s, iter5);
     const stage = idx >= 0 ? s.stages[idx] : null;
     layer5.update(stage?.model ?? null);
     layer5prev.update(idx >= 1 && f5Prev() ? s.stages[idx - 1]?.model ?? null : null);
@@ -727,7 +750,7 @@ allFigures.push(fig5);
 
 function info5(): void {
   const s = store.state;
-  const idx = projectionIndex(s, 1);
+  const idx = projectionIndex(s, iter5);
   const el = $('info-refit');
   if (idx < 1 || !s.metrics[idx]) {
     el.textContent = s.running ? 'Computing…' : '';
@@ -735,11 +758,24 @@ function info5(): void {
   }
   const before = s.metrics[idx - 1], after = s.metrics[idx];
   const constraints = [...s.stages[idx].status].filter(isConstraint).length;
-  el.innerHTML = `${constraints} tangent points added as zero-valued constraints. Chamfer distance to ground truth: ${fmtErr(before.chamfer)} → <b>${fmtErr(after.chamfer)}</b>${puSummary(s.stages[idx].model)}` +
+  const present = new Set(s.stages[idx].status);
+  el.innerHTML = `Iteration ${iter5}: ${constraints} tangent points as zero-valued constraints. Chamfer distance to ground truth: ${fmtErr(before.chamfer)} → <b>${fmtErr(after.chamfer)}</b>${puSummary(s.stages[idx].model)}` +
     legend([
       [colors.levelSet, 'new level set', 'line'], [colors.previousLevelSet, `previous (${s.stages[idx - 1].label.toLowerCase()})`, 'line dashed'],
-      ...tangentLegend([Status.Projected, Status.Fixed]),
+      ...tangentLegend([Status.Projected, Status.KeptPrevious, Status.Clamped, Status.Fixed].filter((c) => c === Status.Projected || present.has(c))),
     ]);
+}
+
+function update5(): void {
+  const s = store.state;
+  const iters = s.stages.filter((st) => st && st.kind === 'projection').map((st) => st.iteration);
+  if ([...iterSelect5.options].map((o) => +o.value).join() !== iters.join()) {
+    iterSelect5.innerHTML = iters.map((k) => `<option value="${k}">${k}</option>`).join('');
+  }
+  if (!iters.includes(iter5)) iter5 = iters.length ? Math.min(Math.max(1, iter5), iters[iters.length - 1]) : 1;
+  iterSelect5.value = String(iter5);
+  fig5.redraw();
+  info5();
 }
 
 // ---------------------------------------------------------------------------
@@ -868,7 +904,7 @@ store.subscribe((s) => {
   info2();
   info3();
   update4();
-  info5();
+  update5();
   update6();
   redrawAll();
 });

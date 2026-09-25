@@ -62,20 +62,23 @@ p { margin: 0 0 14px; }
 /* ---- Sticky control bar ---- */
 .controls {
   position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
-  max-width: calc(var(--col) + 220px); margin: 0 auto;
-  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px;
-  padding: 10px 14px; background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(8px);
+  max-width: var(--col); margin: 0 auto;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 12px; background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
   font-size: 13px;
 }
-.ctl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.ctl { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ctl.slider { flex: 1 1 150px; }
+.ctl.slider label { white-space: nowrap; }
+.ctl.slider input[type='range'] { flex: 1; width: auto; min-width: 70px; }
 .ctl > label, .ctl > .lbl { color: var(--muted); font-size: 12px; }
-.ctl output { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ctl output { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; display: inline-block; min-width: 2.3em; }
 .ctl input[type='range'] { width: 130px; }
 .ctl .row { display: flex; gap: 4px; }
 .ctl input[type='number'] { width: 70px; }
-.ctl input#eps-degen, .ctl input#dedup { width: 110px; }
-.ctl select, .ctl input[type='number'], .ctl button, .advanced input {
+.ctl select, .ctl input[type='number'], .ctl button {
   font: inherit; padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; background: white;
 }
 .ctl button { cursor: pointer; }
@@ -84,12 +87,32 @@ label.check { display: flex; align-items: center; gap: 5px; color: var(--fg) !im
 .seg label { padding: 3px 9px; cursor: pointer; }
 .seg label:has(input:checked) { background: var(--fg); color: white; }
 .seg input { display: none; }
-.advanced summary { cursor: pointer; color: var(--muted); font-size: 12px; }
-.advanced[open] { flex-basis: 100%; }
-.adv-grid { display: grid; grid-template-columns: max-content max-content; gap: 6px 12px; align-items: center; margin-top: 6px; }
+/* ---- Advanced settings: side panel on the right ---- */
+.adv-toggle[aria-expanded='true'] { background: var(--fg); color: white; border-color: var(--fg); }
+.adv-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; width: min(340px, 100vw);
+  overflow-y: auto; padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+}
+.adv-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.adv-top h3 { margin: 0; font-size: 15px; }
+.adv-close { font: inherit; font-size: 20px; line-height: 1; padding: 2px 8px; border: 1px solid #ccc; border-radius: 6px; background: white; cursor: pointer; }
+.adv-panel select, .adv-panel input[type='number'] {
+  font: inherit; padding: 3px 6px; border: 1px solid #ccc; border-radius: 6px; background: white;
+}
+.adv-panel input[type='number'] { width: 110px; }
+/* Wide screens: make room for the panel instead of covering the page. */
+@media (min-width: 1000px) {
+  body.adv-open { padding-right: 356px; }
+}
+.adv-grid { display: grid; grid-template-columns: 1fr max-content; gap: 6px 12px; align-items: center; margin-top: 6px; }
 .adv-grid .span2 { grid-column: span 2; }
 .adv-grid .adv-head { color: var(--muted); font-size: 12px; margin-top: 6px; border-top: 1px solid #e4e4e4; padding-top: 6px; }
-.status { margin-left: auto; color: var(--muted); font-size: 12px; min-height: 1.4em; text-align: right; }
+.status {
+  margin-left: auto; color: var(--muted); font-size: 12px; min-height: 1.4em; text-align: right;
+  flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .status.busy::before {
   content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%;
   border: 2px solid var(--accent); border-right-color: transparent; animation: spin 0.8s linear infinite; vertical-align: -1px;

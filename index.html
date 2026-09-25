@@ -23,6 +23,7 @@
   </header>
 
   <div class="controls" id="controls">
+    <div class="ctl-row">
     <div class="ctl">
       <label for="shape">Shape</label>
       <select id="shape">
@@ -44,11 +45,11 @@
         <label><input type="radio" name="sampling" value="scattered" /> scattered</label>
       </div>
     </div>
-    <div class="ctl" id="ctl-grid">
+    <div class="ctl slider" id="ctl-grid">
       <label for="grid-n">Grid <output id="grid-n-out">16²</output></label>
       <input type="range" id="grid-n" min="4" max="60" value="16" />
     </div>
-    <div class="ctl" id="ctl-count" hidden>
+    <div class="ctl slider" id="ctl-count" hidden>
       <label for="count">Count <output id="count-out">250</output></label>
       <input type="range" id="count" min="20" max="3600" step="10" value="250" />
     </div>
@@ -56,7 +57,9 @@
       <label for="seed">Seed</label>
       <span class="row"><input type="number" id="seed" value="1" min="0" step="1" /><button type="button" id="reseed" title="New random seed">↻</button></span>
     </div>
-    <div class="ctl">
+    </div>
+    <div class="ctl-row">
+    <div class="ctl slider">
       <label for="iters">Iterations <output id="iters-out">10</output></label>
       <input type="range" id="iters" min="1" max="25" value="10" />
     </div>
@@ -66,38 +69,46 @@
     <div class="ctl">
       <label class="check"><input type="checkbox" id="use-pu" checked /> Partition of unity</label>
     </div>
-    <details class="ctl advanced">
-      <summary>Advanced</summary>
-      <div class="adv-grid">
-        <label for="kernel">Kernel</label>
-        <select id="kernel">
-          <option value="cubic">cubic r³ (paper)</option>
-          <option value="thinplate">thin plate r² log r</option>
-          <option value="linear">linear r</option>
-        </select>
-        <label for="descent-iters">Descent steps / iteration</label>
-        <input type="number" id="descent-iters" min="1" max="200" value="10" />
-        <label for="eps-degen">ε<sub>degen</sub> (collapse threshold)</label>
-        <input type="number" id="eps-degen" value="0.00002" step="0.00001" min="0" />
-        <label for="dedup">Deduplicate tolerance</label>
-        <input type="number" id="dedup" value="0.0005" step="0.0001" min="0" />
-        <label class="check span2"><input type="checkbox" id="defer-isolated" checked /> Defer isolated samples in iteration 1</label>
-        <label class="check span2"><input type="checkbox" id="filter-infeasible" checked /> Cull projections outside the exposed arcs</label>
-        <label class="check span2"><input type="checkbox" id="monotone" checked /> Keep previous feasible point instead of regressing</label>
-        <label class="check span2"><input type="checkbox" id="clamp" checked /> Clamp near-misses onto tiny exposed regions (iteration ≥ 7)</label>
-        <span class="adv-head span2">Partition of unity</span>
-        <label for="pu-overlap">Overlap λ</label>
-        <input type="number" id="pu-overlap" value="0.25" step="0.05" min="0" />
-        <label for="pu-leaf">Max points per k-d leaf</label>
-        <input type="number" id="pu-leaf" value="50" step="10" min="4" />
-        <label for="pu-patch">Max points per patch</label>
-        <input type="number" id="pu-patch" value="100" step="10" min="4" />
-        <label for="pu-min">Min points per patch</label>
-        <input type="number" id="pu-min" value="0" step="1" min="0" />
-      </div>
-    </details>
+    <div class="ctl">
+      <button type="button" class="adv-toggle" id="adv-toggle" aria-expanded="false" aria-controls="adv-panel">Advanced ⚙</button>
+    </div>
     <div class="status" id="status" aria-live="polite"></div>
+    </div>
   </div>
+
+  <aside class="adv-panel" id="adv-panel" aria-label="Advanced settings" hidden>
+    <div class="adv-top">
+      <h3>Advanced</h3>
+      <button type="button" class="adv-close" id="adv-close" aria-label="Close advanced settings">×</button>
+    </div>
+    <div class="adv-grid">
+      <label for="kernel">Kernel</label>
+      <select id="kernel">
+        <option value="cubic">cubic r³ (paper)</option>
+        <option value="thinplate">thin plate r² log r</option>
+        <option value="linear">linear r</option>
+      </select>
+      <label for="descent-iters">Descent steps / iteration</label>
+      <input type="number" id="descent-iters" min="1" max="200" value="10" />
+      <label for="eps-degen">ε<sub>degen</sub> (collapse threshold)</label>
+      <input type="number" id="eps-degen" value="0.00002" step="0.00001" min="0" />
+      <label for="dedup">Deduplicate tolerance</label>
+      <input type="number" id="dedup" value="0.0005" step="0.0001" min="0" />
+      <label class="check span2"><input type="checkbox" id="defer-isolated" checked /> Defer isolated samples in iteration 1</label>
+      <label class="check span2"><input type="checkbox" id="filter-infeasible" checked /> Cull projections outside the exposed arcs</label>
+      <label class="check span2"><input type="checkbox" id="monotone" checked /> Keep previous feasible point instead of regressing</label>
+      <label class="check span2"><input type="checkbox" id="clamp" checked /> Clamp near-misses onto tiny exposed regions (iteration ≥ 7)</label>
+      <span class="adv-head span2">Partition of unity</span>
+      <label for="pu-overlap">Overlap λ</label>
+      <input type="number" id="pu-overlap" value="0.25" step="0.05" min="0" />
+      <label for="pu-leaf">Max points per k-d leaf</label>
+      <input type="number" id="pu-leaf" value="50" step="10" min="4" />
+      <label for="pu-patch">Max points per patch</label>
+      <input type="number" id="pu-patch" value="100" step="10" min="4" />
+      <label for="pu-min">Min points per patch</label>
+      <input type="number" id="pu-min" value="0" step="1" min="0" />
+    </div>
+  </aside>
 
   <main>
     <section id="s1">
@@ -214,6 +225,7 @@
         Every accepted tangent point becomes an extra interpolation constraint with value 0, and we solve for the RBF again.
         Near-duplicate points are merged first to keep the system well conditioned. The <span class="lvl">new level set</span> is pulled onto the
         tangent points and moves toward the true curve; the <span class="prev">previous level set</span> is shown dashed.
+        Pick an iteration to see that iteration's re-fit against the stage before it.
       </p>
       <figure class="demo-fig">
         <div class="fig-toolbar" id="tb-refit"></div>
