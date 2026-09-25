@@ -271,6 +271,25 @@ describe('partition of unity', () => {
     }
   });
 
+  it('rank repair fits patches whose points are collinear', () => {
+    // Three rows y = −1, 0, 1 of 12 points each; the k-d split makes each row its own patch.
+    const rows: number[] = [];
+    for (const y of [-1, 0, 1]) for (let k = 0; k < 12; k++) rows.push(-0.3 + (0.6 * k) / 11, y);
+    const g = Float64Array.from(rows);
+    const lin = (x: number, y: number) => 0.7 * x - 1.3 * y + 0.2;
+    const gv = Float64Array.from({ length: g.length / 2 }, (_, i) => lin(g[2 * i], g[2 * i + 1]));
+    const tight = { ...defaultPUOptions(), overlap: 0, maxLeafPoints: 12, maxPatchPoints: 100, minPatchPoints: 0 };
+    // Without repair every patch is collinear, so every local system is singular.
+    expect(() => fitPU(2, g, gv, 'cubic', { ...tight, rankRepair: false })).toThrow();
+    const m = fitPU(2, g, gv, 'cubic', { ...tight, rankRepair: true });
+    expect(m.patches.length).toBe(3);
+    expect(m.stats.repaired).toBe(3);
+    // The outer rows gain one point (one side only), the middle row two.
+    expect(m.patches.map((p) => p.model.alpha.length).sort()).toEqual([13, 13, 14]);
+    // Off the rows the local fits now reproduce the linear function.
+    for (const q of [[0.1, 0.3], [-0.2, -0.6], [0.25, 0.8]]) expect(evalPU(m, q)).toBeCloseTo(lin(q[0], q[1]), 7);
+  });
+
   it('lattice evaluation matches pointwise evaluation', () => {
     const vals = Float64Array.from({ length: n }, (_, i) => pts[2 * i] ** 2 - pts[2 * i + 1]);
     const m = fitPU(2, pts, vals, 'cubic', opts);

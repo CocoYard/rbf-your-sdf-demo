@@ -28,11 +28,13 @@ export interface PUOptions {
   maxPatchPoints: number;
   /** Patches with fewer constraints are dropped (at least dim + 2 is always required). */
   minPatchPoints: number;
+  /** Add off-subspace samples to patches whose constraints are (nearly) collinear / coplanar. */
+  rankRepair: boolean;
 }
 
 /** Defaults of the reference PUInterpolator. */
 export function defaultPUOptions(): PUOptions {
-  return { overlap: 0.25, maxLeafPoints: 200, maxPatchPoints: 675, minPatchPoints: 10 };
+  return { overlap: 0.25, maxLeafPoints: 200, maxPatchPoints: 675, minPatchPoints: 10, rankRepair: true };
 }
 
 export interface PUPatch {
@@ -50,6 +52,8 @@ export interface PUStats {
   maxSize: number;
   /** Patches dropped because they held too few points or their local system was singular. */
   skipped: number;
+  /** Degenerate patches that received extra samples (rank repair). */
+  repaired: number;
 }
 
 /** A fitted PU interpolant. Plain data, like RBFModel. */
@@ -159,6 +163,109 @@ function partition(points: Float64Array, dim: number, n: number, opts: PUOptions
   return patches.filter((_, i) => keep[i]);
 }
 
+/** Degenerate if σ_min < RANK_TOL · σ_max (paper: 0.01). */
+const RANK_TOL = 1e-2;
+
+/** Eigen-decomposition of a small symmetric matrix (cyclic Jacobi). Ascending eigenvalues; column k of `vectors` is the k-th eigenvector. */
+function symmetricEigen(A: Float64Array, n: number): { values: Float64Array; vectors: Float64Array } {
+  const a = Float64Array.from(A);
+  const v = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) v[i * n + i] = 1;
+  for (let sweep = 0; sweep < 50; sweep++) {
+    let off = 0, diag = 0;
+    for (let p = 0; p < n; p++) {
+      diag += a[p * n + p] ** 2;
+      for (let q = p + 1; q < n; q++) off += a[p * n + q] ** 2;
+    }
+    if (off <= 1e-30 * diag || off === 0) break;
+    for (let p = 0; p < n; p++) {
+      for (let q = p + 1; q < n; q++) {
+        const apq = a[p * n + q];
+        if (apq === 0) continue;
+        const theta = (a[q * n + q] - a[p * n + p]) / (2 * apq);
+        const t = (theta >= 0 ? 1 : -1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+        const cs = 1 / Math.sqrt(t * t + 1), sn = t * cs;
+        for (let k = 0; k < n; k++) {
+          const akp = a[k * n + p], akq = a[k * n + q];
+          a[k * n + p] = cs * akp - sn * akq;
+          a[k * n + q] = sn * akp + cs * akq;
+        }
+        for (let k = 0; k < n; k++) {
+          const apk = a[p * n + k], aqk = a[q * n + k];
+          a[p * n + k] = cs * apk - sn * aqk;
+          a[q * n + k] = sn * apk + cs * aqk;
+        }
+        for (let k = 0; k < n; k++) {
+          const vkp = v[k * n + p], vkq = v[k * n + q];
+          v[k * n + p] = cs * vkp - sn * vkq;
+          v[k * n + q] = sn * vkp + cs * vkq;
+        }
+      }
+    }
+  }
+  const order = Array.from({ length: n }, (_, i) => i).sort((i, j) => a[i * n + i] - a[j * n + j]);
+  const values = new Float64Array(n);
+  const vectors = new Float64Array(n * n);
+  order.forEach((src, k) => {
+    values[k] = a[src * n + src];
+    for (let r = 0; r < n; r++) vectors[r * n + k] = v[r * n + src];
+  });
+  return { values, vectors };
+}
+
+/**
+ * Rank repair (paper supplement, "Blended interpolant"). If the patch's constraints
+ * do not span the space affinely (σ_min < 0.01 σ_max of the centered points), the
+ * local system is rank-deficient and the fit is unconstrained off their subspace.
+ * Along the weakest direction u, add the sample closest to the patch center on each
+ * side among those at least one patch radius from the subspace. Only the local solve
+ * changes: the patch's center, radius and weight are untouched. Repeats until the
+ * points span the space. Returns true if anything was added.
+ */
+function repairRank(points: Float64Array, dim: number, n: number, patch: PatchInfo, local: number[]): boolean {
+  let repaired = false;
+  for (let pass = 0; pass < dim; pass++) {
+    const m = local.length;
+    if (m === 0) return repaired;
+    const mean = new Float64Array(dim);
+    for (const i of local) for (let c = 0; c < dim; c++) mean[c] += points[i * dim + c];
+    for (let c = 0; c < dim; c++) mean[c] /= m;
+    const C = new Float64Array(dim * dim);
+    for (const i of local) {
+      for (let r = 0; r < dim; r++) {
+        const dr = points[i * dim + r] - mean[r];
+        for (let c = 0; c < dim; c++) C[r * dim + c] += dr * (points[i * dim + c] - mean[c]);
+      }
+    }
+    // Singular values of the centered point matrix are √(eigenvalues of CᵀC).
+    const { values, vectors } = symmetricEigen(C, dim);
+    const sMax = Math.sqrt(Math.max(values[dim - 1], 0)), sMin = Math.sqrt(Math.max(values[0], 0));
+    if (sMax > 0 && sMin >= RANK_TOL * sMax) return repaired;
+    const u = new Float64Array(dim);
+    for (let r = 0; r < dim; r++) u[r] = vectors[r * dim];
+
+    const present = new Set(local);
+    const best = [-1, -1];
+    const bestD = [Infinity, Infinity];
+    for (let i = 0; i < n; i++) {
+      if (present.has(i)) continue;
+      let off = 0;
+      for (let c = 0; c < dim; c++) off += (points[i * dim + c] - mean[c]) * u[c];
+      if (Math.abs(off) < patch.radius) continue;
+      const side = off > 0 ? 1 : 0;
+      const d = dist2(points, i * dim, patch.center, 0, dim);
+      if (d < bestD[side]) {
+        bestD[side] = d;
+        best[side] = i;
+      }
+    }
+    if (best[0] < 0 && best[1] < 0) return repaired;
+    for (const b of best) if (b >= 0) local.push(b);
+    repaired = true;
+  }
+  return repaired;
+}
+
 /** Fit a PU interpolant: partition the constraints, then one local RBF per patch. */
 export function fitPU(
   dim: number,
@@ -174,14 +281,15 @@ export function fitPU(
   const infos = partition(points, dim, n, opts);
   const patches: PUPatch[] = [];
   const sizes: number[] = [];
-  let skipped = 0;
+  let skipped = 0, repaired = 0;
 
   for (const info of infos) {
     if (info.members.length < minPoints || !(info.radius > 0)) {
       skipped++;
       continue;
     }
-    const local = info.members;
+    const local = info.members.slice();
+    if (opts.rankRepair && repairRank(points, dim, n, info, local)) repaired++;
     const lp = new Float64Array(local.length * dim);
     const lv = new Float64Array(local.length);
     local.forEach((i, k) => {
@@ -210,6 +318,7 @@ export function fitPU(
       meanSize: sizes.reduce((a, b) => a + b, 0) / sizes.length,
       maxSize: Math.max(...sizes),
       skipped,
+      repaired,
     },
   };
 }
@@ -229,7 +338,7 @@ function wendlandDeriv(s: number): number {
  * k = 1 is simply the patch with the nearest sphere: continuous where the field leaves the
  * union of supports, but it jumps where the nearest sphere changes. k ≥ 2 removes those jumps.
  */
-const FALLBACK_K = 1;
+const FALLBACK_K = 2;
 
 /**
  * The field outside every support: modified Shepard (Franke–Little) blending of the

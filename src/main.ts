@@ -54,6 +54,7 @@ const ui = {
   puLeaf: $<HTMLInputElement>('pu-leaf'),
   puPatch: $<HTMLInputElement>('pu-patch'),
   puMin: $<HTMLInputElement>('pu-min'),
+  puRepair: $<HTMLInputElement>('pu-repair'),
   kernel: $<HTMLSelectElement>('kernel'),
   descentIters: $<HTMLInputElement>('descent-iters'),
   epsDegen: $<HTMLInputElement>('eps-degen'),
@@ -120,6 +121,7 @@ function run(): void {
     maxLeafPoints: int(ui.puLeaf, 50, 4),
     maxPatchPoints: int(ui.puPatch, 100, 4),
     minPatchPoints: int(ui.puMin, 0, 0),
+    rankRepair: ui.puRepair.checked,
   };
   pipeline.run(shape, {
     domain: DOMAIN,
@@ -177,7 +179,7 @@ ui.upload.addEventListener('change', async () => {
 });
 for (const r of document.querySelectorAll<HTMLInputElement>('input[name=sampling]')) r.addEventListener('change', () => runSoon(0));
 for (const el of [ui.gridN, ui.count, ui.iters]) el.addEventListener('input', () => runSoon());
-for (const el of [ui.seed, ui.kernel, ui.descentIters, ui.epsDegen, ui.dedup, ui.useRegions, ui.usePU, ui.puOverlap, ui.puLeaf, ui.puPatch, ui.puMin, ui.deferIsolated, ui.filterInfeasible, ui.monotone, ui.clamp]) {
+for (const el of [ui.seed, ui.kernel, ui.descentIters, ui.epsDegen, ui.dedup, ui.useRegions, ui.usePU, ui.puOverlap, ui.puLeaf, ui.puPatch, ui.puMin, ui.puRepair, ui.deferIsolated, ui.filterInfeasible, ui.monotone, ui.clamp]) {
   el.addEventListener('change', () => runSoon(0));
 }
 ui.reseed.addEventListener('click', () => {
@@ -222,7 +224,8 @@ const fmtErr = (v: number) => (!Number.isFinite(v) ? '—' : Math.abs(v) < 1e-3 
 function puSummary(model: Interpolant | null | undefined): string {
   if (!model || model.kind !== 'pu') return '';
   const s = model.stats;
-  return ` · ${s.patches} PU patch${s.patches === 1 ? '' : 'es'} over ${s.constraints} constraints (${s.minSize}–${s.maxSize} each)`;
+  const extra = [s.repaired ? `${s.repaired} rank-repaired` : '', s.skipped ? `${s.skipped} skipped` : ''].filter(Boolean).join(', ');
+  return ` · ${s.patches} PU patch${s.patches === 1 ? '' : 'es'} over ${s.constraints} constraints (${s.minSize}–${s.maxSize} each${extra ? `; ${extra}` : ''})`;
 }
 const patchLegend = (model: Interpolant | null | undefined): [string, string, string][] =>
   model?.kind === 'pu' ? [['#6a5acd', 'PU patch support', 'line']] : [];
