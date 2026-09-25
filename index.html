@@ -162,7 +162,7 @@
     <section id="s3">
       <h2><span class="num">3</span> Interpolate the samples with an RBF</h2>
       <p>
-        We fit a radial basis function interpolant with the cubic kernel <span class="m">\varphi(r) = r^3</span> and a linear polynomial:
+        We interpolate the samples with a radial basis function using the cubic kernel <span class="m">\varphi(r) = r^3</span> and a linear polynomial:
       </p>
       <div class="md">\tilde D(\mathbf{x}) = \sum_{i} \alpha_i \, \|\mathbf{x}-\mathbf{x}_i\|^3 + \mathbf{c}^\top\mathbf{x} + c_0,
         \qquad \tilde D(\mathbf{x}_i) = d_i, \quad \textstyle\sum_i \alpha_i = 0, \quad \sum_i \alpha_i \mathbf{x}_i = \mathbf{0}.</div>
@@ -175,14 +175,14 @@
         One dense solve costs <span class="m">O(n^3)</span>, so by default we use a <b>partition of unity</b> (turn it off above for a single global RBF):
         a k-d tree splits the constraints at the median of the longest axis until each leaf holds at most 50. Each leaf becomes a
         <span class="swatch patch"></span>disk patch, centered at the leaf's mean with the leaf's radius inflated by
-        <span class="m">1+\lambda</span> so neighbors overlap. A local RBF <span class="m">f_j</span> is fitted to the constraints
-        inside each disk, and the local fits are blended with Wendland weights:
+        <span class="m">1+\lambda</span> so neighbors overlap. A local RBF <span class="m">f_j</span> interpolates the constraints
+        inside each disk, and the local interpolants are blended with Wendland weights:
       </p>
       <div class="md">\tilde D(\mathbf{x}) = \frac{\sum_j \hat w_j(\mathbf{x})\, f_j(\mathbf{x})}{\sum_k \hat w_k(\mathbf{x})}, \qquad
         \hat w_j(\mathbf{x}) = \left(1-\tfrac{r}{R_j}\right)_+^4 \left(4\tfrac{r}{R_j}+1\right), \quad r = \|\mathbf{x}-\boldsymbol\xi_j\|.</div>
       <p>
         Every constraint lies inside every patch whose weight is nonzero there, so <span class="m">\tilde D</span> still interpolates
-        all of them. The partition is rebuilt at every fit, because the tangent points move. Lower the leaf and patch sizes under
+        all of them. The partition is rebuilt at every solve, because the tangent points move. Lower the leaf and patch sizes under
         Advanced to see more patches.
       </p>
       <figure class="demo-fig">
@@ -221,12 +221,12 @@
     </section>
 
     <section id="s5">
-      <h2><span class="num">5</span> Re-fit with the tangent points</h2>
+      <h2><span class="num">5</span> Re-interpolate with the tangent points</h2>
       <p>
         Every accepted tangent point becomes an extra interpolation constraint with value 0, and we solve for the RBF again.
         Near-duplicate points are merged first to keep the system well conditioned. The <span class="lvl">new level set</span> is pulled onto the
         tangent points and moves toward the true curve; the <span class="prev">previous level set</span> is shown dashed.
-        Pick an iteration to see that iteration's re-fit against the stage before it.
+        Pick an iteration to see that iteration's interpolant against the stage before it.
       </p>
       <figure class="demo-fig">
         <div class="fig-toolbar" id="tb-refit"></div>

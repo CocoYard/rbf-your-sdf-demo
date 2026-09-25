@@ -24,7 +24,7 @@ It's one long scrolling article with a sticky control bar. The controls pick the
 3. **First RBF:** the cubic RBF fitted to the samples alone, with its zero level set against the ground truth.
 4. **Tangent points:** the descent path on each circle, with a play button, a step slider and a choice of iteration. Clicking a sample plots the objective around its circle, with its exposed arcs shaded.
 5. **Re-fit:** the new level set compared with the previous one.
-6. **Iterate:** a slider and play button over all fits, plus a chart of the error at each stage.
+6. **Iterate:** a slider and play button over all solves, plus a chart of the error at each stage.
 
 ## Results
 

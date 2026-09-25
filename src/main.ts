@@ -193,7 +193,7 @@ store.subscribe((s) => {
   if (s.error) ui.status.textContent = `Error: ${s.error}`;
   else if (s.running) ui.status.textContent = s.progress || 'Working…';
   else if (s.samples && s.ms !== null) {
-    ui.status.textContent = `${s.samples.values.length} samples · ${s.stages.length} fits · ${(s.ms / 1000).toFixed(2)} s`;
+    ui.status.textContent = `${s.samples.values.length} samples · ${s.stages.length} solves · ${(s.ms / 1000).toFixed(2)} s`;
   } else ui.status.textContent = '';
 });
 

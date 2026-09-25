@@ -225,7 +225,7 @@ export function runPipeline(
   for (let i = 0; i < n; i++) if (Math.abs(values[i]) < onSurfaceEps) status[i] = Status.OnSurface;
 
   // Stage 0: samples only.
-  callbacks.onProgress?.('Fitting RBF to samples');
+  callbacks.onProgress?.('Interpolating the samples');
   const model0 = fitInterpolant(dim, points, values, opts.kernel, opts.interpolant, solver);
   push({
     kind: 'samples', iteration: 0, label: 'Samples only',
@@ -254,7 +254,7 @@ export function runPipeline(
       }
     }
     if (any) {
-      callbacks.onProgress?.('Fitting RBF with collapsed-region tangent points');
+      callbacks.onProgress?.('Interpolating with collapsed-region tangent points');
       const st = Uint8Array.from(status);
       const model = fitWithTangents(samples, tangents, st, opts, solver);
       push({ kind: 'collapsed', iteration: 0, label: 'Collapsed-region tangent points', tangents: Float64Array.from(tangents), status: st, model });
@@ -339,7 +339,7 @@ export function runPipeline(
       }
     }
 
-    callbacks.onProgress?.(`Iteration ${k}: fitting RBF`);
+    callbacks.onProgress?.(`Iteration ${k}: interpolating`);
     const fitStatus = Uint8Array.from(st);
     const newModel = fitWithTangents(samples, tan, fitStatus, opts, solver);
     push({ kind: 'projection', iteration: k, label: `Iteration ${k}`, tangents: tan, status: fitStatus, model: newModel, paths });
