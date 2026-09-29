@@ -10,14 +10,14 @@
 <body>
   <header class="hero">
     <p class="eyebrow">Interactive 2D walkthrough</p>
-    <h1>RBF Your SDF</h1>
-    <p class="subtitle">Radial Basis Function Interpolation of Signed Distance Fields with Implied Tangent Points</p>
+    <h1><a href="https://cragl.cs.gmu.edu/rbfyoursdf/">RBF Your SDF</a></h1>
+    <p class="subtitle"><a href="https://cragl.cs.gmu.edu/rbfyoursdf/">Radial Basis Function Interpolation of Signed Distance Fields with Implied Tangent Points</a></p>
     <p class="authors">Yong Cheng &nbsp;·&nbsp; Yotam Gingold &nbsp;<span class="affil">George Mason University</span></p>
     <p class="lede">
       Given only samples of a signed distance function (SDF), we want a smooth function whose zero level set
-      recovers the surface. Each SDF sample secretly says more than its value: the surface must touch the circle
-      (in 3D, the sphere) around the sample whose radius is the sample's distance. This page runs a 2D version of the
-      algorithm live in your browser, one step at a time. Change the shape or the sampling in the bar below and every
+      recovers the surface. Thanks to <a href="https://web.archive.org/web/20111112202136/http://www.cs.columbia.edu/~batty/misc/levelset_meshing/level_set_reconstruction.html">previous</a> <a href="https://odedstein.com/projects/reach-for-the-spheres/">work</a>, we know that each SDF sample says more than its value: the surface must touch the circle
+      (in 3D, the sphere) around the sample whose radius is the sample's distance. This page runs a 2D version of our <a href="https://cragl.cs.gmu.edu/rbfyoursdf/">RBF Your SDF</a> 
+      algorithm live in your browser, one step at a time. Change the parameters in the bar below and every
       figure updates.
     </p>
   </header>
@@ -115,8 +115,9 @@
     <section id="s1">
       <h2><span class="num">1</span> Ground truth and SDF samples</h2>
       <p>
-        We start from a closed curve (loaded from an SVG, so it is easy to swap in your own) and sample its signed
-        distance function <span class="m">D</span>, negative inside and positive outside. Each sample
+        We start from a closed curve (loaded from an SVG) and sample its signed
+        distance function <span class="m">D</span>, negative inside and positive outside. This is what our algorithm takes as input.
+        Each sample
         <span class="m">(\mathbf{x}_i, d_i)</span> is drawn as a circle of radius <span class="m">|d_i|</span>:
         <span class="pos">red</span> outside, <span class="neg">blue</span> inside.
       </p>
@@ -138,17 +139,17 @@
       <h2><span class="num">2</span> <span class="optional">Optional</span> Power diagram and exposed arcs</h2>
       <p>
         A tangent point cannot be inside another sample's disk, since that disk contains no surface. The part of a circle not covered by
-        other disks is its <em>exposed region</em>, here a set of <span class="swatch arc"></span>exposed arcs. They are exactly the
-        pieces of the boundary of the union of all disks. We compute them with the <em>power diagram</em>, whose dual is the
-        regular triangulation: the cell of sample <span class="m">i</span> is where
-        <span class="m">|\mathbf{x}-\mathbf{x}_i|^2 - d_i^2</span> is smallest, and each circle's exposed arcs are the parts of the circle
+        other disks is its <em>exposed region</em>, here visualized as a set of <span class="swatch arc"></span>exposed arcs. They are exactly the
+        boundary of the union of all disks. We compute them with the <em>power diagram</em>, whose dual is the
+        regular triangulation. The cell of sample <span class="m">i</span> is where
+        <span class="m">|\mathbf{x}-\mathbf{x}_i|^2 - d_i^2</span> is smallest. Each circle's exposed arcs are the parts of the circle
         inside its own cell. So we clip each circle against the edges of its cell.
       </p>
       <p>
-        Sometimes the exposed region collapses to (nearly) a single point, for example at sharp corners, where the circle is
+        Sometimes the exposed region collapses to (nearly) a single point. This happens at sharp corners, where the circle is
         squeezed by its neighbors, or when two circles are internally tangent, as with collinear grid samples near
         a flat edge. Then the tangent point is determined by geometry alone and is <span class="swatch fixed"></span>fixed there.
-        A sample that is completely covered disappears from the power diagram (dashed circles); we clip it against the
+        Sometimes these samples disappear from the power diagram (dashed circles); we clip it against the
         neighbors of the cell that contains it, and an infinitesimal arc remains.
         This step is optional: turn off <b>Exposed-arc step</b> above to skip it.
       </p>
@@ -223,7 +224,7 @@
     <section id="s5">
       <h2><span class="num">5</span> Re-interpolate with the tangent points</h2>
       <p>
-        Every accepted tangent point becomes an extra interpolation constraint with value 0, and we solve for the RBF again.
+        Every accepted tangent point becomes an extra interpolation constraint with value 0. We solve for the RBF again.
         Near-duplicate points are merged first to keep the system well conditioned. The <span class="lvl">new level set</span> is pulled onto the
         tangent points and moves toward the true curve; the <span class="prev">previous level set</span> is shown dashed.
         Pick an iteration to see that iteration's interpolant against the stage before it.
@@ -260,8 +261,8 @@
     <section id="notes">
       <h2>Notes</h2>
       <p>
-        This demo is a simplified 2D version of the method. The full 3D method uses the same ideas with spheres instead of circles,
-        BFGS instead of plain projected gradient descent, and dual contouring to extract a mesh.
+        This demo is a simplified 2D version of the method. The full 3D method uses the same ideas with spheres instead of circles and
+        BFGS instead of plain projected gradient descent.
         All algorithm code runs in your browser in a Web Worker and is independent of the page.
       </p>
       <p class="fine">
