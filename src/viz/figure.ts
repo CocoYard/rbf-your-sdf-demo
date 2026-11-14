@@ -156,6 +156,9 @@ export class Figure {
     c.addEventListener('pointerdown', (ev) => {
       if (ev.pointerType === 'touch') return;
       this.touchInput = false;
+      // Only the primary button pans. A right-click (or ctrl-click on macOS) opens the context
+      // menu, which swallows the matching pointerup and would leave the drag stuck on.
+      if (ev.button !== 0 || ev.ctrlKey) return;
       const [x, y] = this.local(ev);
       this.dragging = { x, y, cx: this.cx, cy: this.cy, moved: false };
       c.setPointerCapture(ev.pointerId);
@@ -163,6 +166,7 @@ export class Figure {
     c.addEventListener('pointermove', (ev) => {
       if (ev.pointerType === 'touch') return;
       const [x, y] = this.local(ev);
+      if (this.dragging && !(ev.buttons & 1)) endDrag(); // the release happened where we could not see it
       if (this.dragging) {
         const dx = x - this.dragging.x, dy = y - this.dragging.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) this.dragging.moved = true;
@@ -183,6 +187,12 @@ export class Figure {
       c.classList.remove('panning');
       if (d && !d.moved) this.opts.onClick?.(this.toWorld(...this.local(ev)), this);
     });
+    const endDrag = () => {
+      this.dragging = null;
+      c.classList.remove('panning');
+    };
+    c.addEventListener('pointercancel', endDrag);
+    c.addEventListener('contextmenu', endDrag);
     c.addEventListener('pointerleave', (ev) => {
       if (ev.pointerType !== 'touch' && !this.dragging) this.opts.onHover?.(null, this);
     });
