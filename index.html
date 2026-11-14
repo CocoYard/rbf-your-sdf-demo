@@ -17,7 +17,7 @@
       Given only samples of a signed distance function (SDF), we want a smooth function whose zero level set
       recovers the surface. Thanks to <a href="https://web.archive.org/web/20111112202136/http://www.cs.columbia.edu/~batty/misc/levelset_meshing/level_set_reconstruction.html">previous</a> <a href="https://odedstein.com/projects/reach-for-the-spheres/">work</a>, we know that each SDF sample says more than its value: the surface must touch the circle
       (in 3D, the sphere) around the sample whose radius is the sample's distance. This page runs a 2D version of our <a href="https://cragl.cs.gmu.edu/rbfyoursdf/">RBF Your SDF</a> 
-      algorithm live in your browser, one step at a time. Change the parameters in the bar below and every
+      algorithm live in your browser, one step at a time. Change the parameters in the control panel and every
       figure updates.
     </p>
   </header>
@@ -151,7 +151,7 @@
         a flat edge. Then the tangent point is determined by geometry alone and is <span class="swatch fixed"></span>fixed there.
         Sometimes these samples disappear from the power diagram (dashed circles); we clip it against the
         neighbors of the cell that contains it, and an infinitesimal arc remains.
-        This step is optional: turn off <b>Exposed-arc step</b> above to skip it.
+        This step is optional: turn off <b>Exposed-arc step</b> in the control panel to skip it.
       </p>
       <figure class="demo-fig">
         <div class="fig-toolbar" id="tb-power"></div>
@@ -173,7 +173,7 @@
         because nothing tells it where the surface actually is.
       </p>
       <p>
-        One dense solve costs <span class="m">O(n^3)</span>, so by default we use a <b>partition of unity</b> (turn it off above for a single global RBF):
+        One dense solve costs <span class="m">O(n^3)</span>, so by default we use a <b>partition of unity</b> (turn it off in the control panel for a single global RBF):
         a k-d tree splits the constraints at the median of the longest axis until each leaf holds at most 50. Each leaf becomes a
         <span class="swatch patch"></span>disk patch, centered at the leaf's mean with the leaf's radius inflated by
         <span class="m">1+\lambda</span> so neighbors overlap. A local RBF <span class="m">f_j</span> interpolates the constraints
